@@ -53,13 +53,22 @@ class preprocess:
         for file in self.input_files:
             # filter
             print(f"Processing {os.path.basename(file)}...")
-            self.__process_tiles_single(file)
-            print(f"Done.")
 
-            # feature extraction
-            print(f"Feature eactaction on {os.path.basename(file)}...")
-            self.__feature_extraction_single(file)
-            print(f"Done.")
+            feature_save_path = os.path.join(
+                str(self.intermediate_dir[file]["_features"]),
+                f"features_{self.feature_extraction_param['pretrained_model_name'].lower()}.npy",
+            )
+            if os.path.exists(feature_save_path):
+                print(f"Features already extracted for {os.path.basename(file)}.")
+            else:
+                print(f"Processing {os.path.basename(file)}...")
+                self.__process_tiles_single(file)
+                print(f"Done.")
+
+                # feature extraction
+                print(f"Feature eactaction on {os.path.basename(file)}...")
+                self.__feature_extraction_single(file)
+                print(f"Done.")
 
     def __process_tiles_single(self, slide_path):
         slide = OpenSlide(slide_path)
@@ -285,68 +294,74 @@ class preprocess:
         """Extract features from slides using either UNI or ResNet50 model, processing one tile at a time."""
         temp_tile_list = self.tile_list[-1]
         model_name = self.feature_extraction_param["pretrained_model_name"]
+        feature_save_path = os.path.join(
+            str(self.intermediate_dir[slide_path]["_features"]),
+            f"features_{model_name.lower()}.npy",
+        )
+        # if features already extracted, skip
+        if os.path.exists(feature_save_path):
+            print(f"Features already extracted for {os.path.basename(slide_path)}.")
+            return
+        else:
+            try:
+                # Model initialization based on type
+                if "uni" in model_name.lower():
+                    uni_token = self.feature_extraction_param["pretrained_model_param"][
+                        "UNI"
+                    ]["login_token"]
 
-        try:
-            # Model initialization based on type
-            if model_name.lower() == "uni":
-                uni_token = self.feature_extraction_param["pretrained_model_param"][
-                    "UNI"
-                ]["login_token"]
+                    UNI_model = LoadHFModel(
+                        token=uni_token,
+                        model_name="hf-hub:MahmoodLab/uni",
+                        weights_dir=self.feature_extraction_param["model_dir"],
+                    )
+                    model, _ = UNI_model.load_model()
+                elif "resnet" in model_name.lower():
+                    model = LoadTVmodels(
+                        weights_dir=self.feature_extraction_param["model_dir"]
+                    )
 
-                UNI_model = LoadHFModel(
-                    token=uni_token,
-                    model_name="hf-hub:MahmoodLab/uni",
-                    weights_dir=self.feature_extraction_param["model_dir"],
+                # model set up
+                model.to(self.device)
+                model.eval()
+
+                # transformation setup
+                transform = transforms.Compose(
+                    [
+                        transforms.Resize(224),
+                        transforms.ToTensor(),
+                        transforms.Normalize(
+                            mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]
+                        ),
+                    ]
                 )
-                model, _ = UNI_model.load_model()
-            elif model_name.lower() == "resnet50":
-                model = LoadTVmodels(
-                    weights_dir=self.feature_extraction_param["model_dir"]
+                #
+                features = []
+                with torch.inference_mode():
+                    for tile in temp_tile_list:
+                        # Transform and process single tile
+                        tile_tensor = transform(tile).unsqueeze(0).to(self.device)
+                        feature = model(tile_tensor)
+                        features.append(feature.detach().cpu().numpy())
+
+                        # Clear GPU memory after each tile
+                        if torch.cuda.is_available():
+                            torch.cuda.empty_cache()
+
+                # Concatenate and save features
+                features = np.concatenate(features, axis=0)
+                self.feature_list.append(features)
+
+                # Save to disk
+                save_path = os.path.join(
+                    str(self.intermediate_dir[slide_path]["_features"]),
+                    f"features_{model_name.lower()}.npy",
                 )
+                np.save(save_path, features)
 
-            # model set up
-            model.to(self.device)
-            model.eval()
-
-            # transformation setup
-            transform = transforms.Compose(
-                [
-                    transforms.Resize(224),
-                    transforms.ToTensor(),
-                    transforms.Normalize(
-                        mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]
-                    ),
-                ]
-            )
-
-            #
-            features = []
-            #
-            with torch.inference_mode():
-                for tile in temp_tile_list:
-                    # Transform and process single tile
-                    tile_tensor = transform(tile).unsqueeze(0).to(self.device)
-                    feature = model(tile_tensor)
-                    features.append(feature.detach().cpu().numpy())
-
-                    # Clear GPU memory after each tile
-                    if torch.cuda.is_available():
-                        torch.cuda.empty_cache()
-
-            # Concatenate and save features
-            features = np.concatenate(features, axis=0)
-            self.feature_list.append(features)
-
-            # Save to disk
-            save_path = os.path.join(
-                str(self.intermediate_dir[slide_path]["_features"]),
-                f"features_{model_name}.npy",
-            )
-            np.save(save_path, features)
-
-        except Exception as e:
-            print(f"Error during feature extraction: {e}")
-            raise
-        finally:
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
+            except Exception as e:
+                print(f"Error during feature extraction: {e}")
+                raise
+            finally:
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()

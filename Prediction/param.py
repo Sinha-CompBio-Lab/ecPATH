@@ -7,6 +7,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 basic_param = {
     "input_dir": os.path.join(BASE_DIR, "input"),
     "output_dir": os.path.join(BASE_DIR, "output"),
+    "cancer_type": "LGG",
 }
 
 preprocess_param = {
@@ -25,10 +26,12 @@ preprocess_param = {
 }
 
 feature_extraction_param = {
-    "pretrained_model_name": "resnet50",  # UNI, case insensitive
+    "pretrained_model_name": "resnet",  # UNI, case insensitive
     "model_dir": os.path.join(BASE_DIR, "assets"),
     "pretrained_model_param": {
         "resnet50": {},
-        "UNI": {"login_token": ""},  # 'your_login_token' for approval
+        "UNI": {
+            "login_token": ""
+        },  # 'your_login_token' with approved access from huggingface.co
     },
 }
