@@ -3,13 +3,13 @@ import os
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 MODE = "prediction"  # or "reviewer_test" for testing (skip preprocessing & use test features)
-# Keyword (input file name)
+
 Zenodo_record_id = ""
 
 basic_param = {
     "input_dir": os.path.join(BASE_DIR, "input"),
     "output_dir": os.path.join(BASE_DIR, "output"),
-    "cancer_type": "LGG",
+    "cancer_type": "LGG",  # only support ['LGG', 'GBM', 'STAD']
 }
 
 preprocess_param = {

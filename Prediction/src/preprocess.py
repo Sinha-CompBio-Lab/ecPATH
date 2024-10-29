@@ -61,7 +61,6 @@ class preprocess:
             if os.path.exists(feature_save_path):
                 print(f"Features already extracted for {os.path.basename(file)}.")
             else:
-                print(f"Processing {os.path.basename(file)}...")
                 self.__process_tiles_single(file)
                 print(f"Done.")
 

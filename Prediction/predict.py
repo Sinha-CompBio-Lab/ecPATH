@@ -28,6 +28,14 @@ from src.utils.utils_preprocessing import *
 init_random_seed()
 max_workers = get_max_workers()
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+model_path = os.path.join(BASE_DIR, "..", "Data", "Model")
+MLP_model_path = os.path.join(model_path, "MLP")
+LR_model_path = os.path.join(model_path, "LR")
+
+# # check for Data directory if not exist download from zenodo
+# if not os.path.exists(os.path.join(BASE_DIR, "Data")):
+#     print("Data directory not found, downloading from zenodo...")
+#     download_data(Zenodo_record_id)
 
 # check for the input files, in the input directory with the input keyword
 input_files = glob.glob(
@@ -62,9 +70,6 @@ else:
 
 ###
 ### gene expression prediction
-
-model_path = "/shares/sinha/lliu/projects/pre-cancer-image-omics/ecPATH/Data/Model/MLP"
-
 print("Start Gene Expression Prediction...")
 gene_expresion_output_path = os.path.join(
     basic_param["output_dir"],
@@ -72,7 +77,7 @@ gene_expresion_output_path = os.path.join(
 )
 gene_expr_predictor = GeneExpressionPredictor(
     input_files,
-    model_path,
+    MLP_model_path,
     feature_extraction_param["pretrained_model_name"],
     basic_param["cancer_type"],
     preprocess_param["slide_extention"],
@@ -88,23 +93,19 @@ gene_expr_predictions.to_csv(
     index=True,
     sep=",",
 )
-
 print(f"Done, gene expression predictions saved as {gene_expresion_output_path}\n")
 
 
 ###
 ### ecDNA prediction
 print("Start ecDNA Prediction...")
-
-model_path = "/shares/sinha/lliu/projects/pre-cancer-image-omics/ecPATH/Data/Model/LR"
-
 ecDNA_output_path = os.path.join(
     basic_param["output_dir"],
     f"{basic_param['cancer_type']}_ecDNA_predictions_{feature_extraction_param['pretrained_model_name']}.csv",
 )
 ecDNA_Prediction = ecDNA_Predictor(
     gene_expr_predictions,
-    model_path,
+    LR_model_path,
     feature_extraction_param["pretrained_model_name"],
     basic_param["cancer_type"],
 )

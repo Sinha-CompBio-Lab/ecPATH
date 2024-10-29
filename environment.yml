@@ -1,0 +1,33 @@
+name: ecpath
+channels:
+  - pytorch
+  - nvidia
+  - conda-forge
+  - r
+  - bioconda
+  - defaults
+dependencies:
+  - python=3.9
+  - numpy=1.26.4
+  - pandas=2.2.3
+  - matplotlib=3.9.2
+  - scipy=1.13.1
+  - scikit-learn=1.5.2
+  - pytorch=2.5.0
+  - cudatoolkit=11.8.0
+  - torchvision=0.15.2
+  - torchaudio=2.5.0
+  - openssl=3.1.7
+  - pip:
+      - annotated-types==0.7.0
+      - click==8.1.7
+      - fsspec==2024.10.0
+      - huggingface-hub==0.26.1
+      - more-click==0.1.2
+      - pydantic==2.9.2
+      - pystow==0.5.6
+      - safetensors==0.4.5
+      - sympy==1.13.1
+      - timm==1.0.11
+      - tqdm==4.66.5
+      - zenodo-client==0.3.5
