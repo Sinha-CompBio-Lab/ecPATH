@@ -6,11 +6,12 @@
 ## TBD
 
 ## Usage & Demo:
-    1. clone this repo 'git clone https://github.com/Sinha-CompBio-Lab/ecPATH.git'
-    2. create an conda environment `conda env create -f environment.yml`
-    3. Prepare input slides: place slides in `./Prediction/input/` and include a common keyword in the names. Currently, only SVS image files (`.svs` extension) are tested & supported.
-    4. execute `python3 ./Prediction/predict.py`
-    5. Output:
+    1. Clone this repo 'git clone https://github.com/Sinha-CompBio-Lab/ecPATH.git'
+    2. Create an conda environment `conda env create -f environment.yml`
+    3. Prepare input slides: place slides in `./Prediction/input/` and include a common keyword in the  names. Currently, only SVS image files (`.svs` extension) are tested & supported.
+    4. Customize `./Prediction/param.py` to fit your analysis. Important parameters include but not limited to cancer_type, pretrained_model_name, input_keyword, slide_extention etc.
+    5. Execute `python3 ./Prediction/predict.py`
+    6. Output:
         a.) for each input slide:
             1.) a collection of tile features at `./Prediction/input/SlideKeyword_1/_features/features_{model_name}.npy` 
             2.) a visualization of tile selection at `./Prediction/input/SlideKeyword_2/_masks/mask.pdf`
