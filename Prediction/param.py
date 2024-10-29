@@ -2,7 +2,9 @@ import os
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
+MODE = "prediction"  # or "reviewer_test" for testing (skip preprocessing & use test features)
 # Keyword (input file name)
+Zenodo_record_id = ""
 
 basic_param = {
     "input_dir": os.path.join(BASE_DIR, "input"),
@@ -26,7 +28,7 @@ preprocess_param = {
 }
 
 feature_extraction_param = {
-    "pretrained_model_name": "resnet",  # UNI, case insensitive
+    "pretrained_model_name": "resnet",  # or UNI, case insensitive
     "model_dir": os.path.join(BASE_DIR, "assets"),
     "pretrained_model_param": {
         "resnet50": {},

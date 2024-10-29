@@ -1,30 +1,45 @@
 import os
+import sys
 
 import numpy as np
 import pandas as pd
 import torch
 from src.MLP import MLP_regression
 
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from param import MODE, basic_param
+
 
 class GeneExpressionPredictor:
     def __init__(
         self, input_files, model_path, model_name, cancer_type, slide_extention, device
     ):
+        if MODE == "reviewer_test":
+            model_name = "uni"  # use uni model for reviewer test
         self.input_files = input_files
         self.feature_list = []
         self.model_name = model_name
         self.model_path = os.path.join(model_path, model_name.lower(), cancer_type)
         self.slide_extention = slide_extention
         self.device = device
+        self.genes_to_predict = None
+        self.predictions = None
 
     def load_features(self):
-        for file in self.input_files:
-            feature_path = os.path.join(
-                file.replace(self.slide_extention, ""),
-                "_features",
-                f"features_{self.model_name.lower()}.npy",
-            )
-            self.feature_list.append(np.load(feature_path))
+        if MODE == "reviewer_test":  # uses uni features - 1024
+            # use test features provided by the developer
+            test_feature_path = os.path.join(basic_param["input_dir"], "test_features")
+            for file in os.listdir(test_feature_path):
+                feature_path = os.path.join(test_feature_path, file)
+                self.feature_list.append(np.load(feature_path))
+        else:
+            for file in self.input_files:
+                feature_path = os.path.join(
+                    file.replace(self.slide_extention, ""),
+                    "_features",
+                    f"features_{self.model_name.lower()}.npy",
+                )
+                self.feature_list.append(np.load(feature_path))
 
     def predict(self):
         preds_all_sample = []
@@ -55,6 +70,7 @@ class GeneExpressionPredictor:
 
     def __load_model(self, fold):
         # decide the input size based on the model
+
         if "uni" in self.model_name.lower():
             n_input = 1024
         elif "resnet" in self.model_name.lower():

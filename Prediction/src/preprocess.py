@@ -201,31 +201,34 @@ class preprocess:
             )
 
         #### save masked images for visualization
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(30, 15))
         line_color = [0, 255, 0]
         n_tiles = len(tiles_list)
 
-        img_mask[:, ::mask_tile_size, :] = line_color
-        img_mask[::mask_tile_size, :, :] = line_color
-        mask[:, ::mask_tile_size, :] = line_color
-        mask[::mask_tile_size, :, :] = line_color
+        img_mask[:, ::mask_tile_size] = img_mask[::mask_tile_size, :] = mask[
+            :, ::mask_tile_size
+        ] = mask[::mask_tile_size, :] = line_color
 
-        fig, ax = plt.subplots(1, 2, figsize=(30, 15))
-        ax[0].imshow(img_mask)
-        ax[1].imshow(mask)
+        ax1.imshow(img_mask)
+        ax2.imshow(mask)
 
-        ax[0].set_title(
+        ax1.set_title(
             f"{os.path.basename(slide_path)}, mag_original: {mag_original}, mag_assumed: {self.preprocess_param['mag_assumed']}"
         )
-        ax[1].set_title(
+        ax2.set_title(
             f"n_rows: {n_rows}, n_cols: {n_cols}, n_tiles_total: {n_tiles_total}, n_tiles_selected: {n_tiles}"
         )
-        plt.tight_layout(h_pad=0.4, w_pad=0.5)
+
+        plt.tight_layout(h_pad=0.4, w_pad=0.4)
+
+        #
         plt.savefig(
             os.path.join(str(self.intermediate_dir[slide_path]["_masks"]), "mask.pdf"),
             format="pdf",
             dpi=50,
         )
         plt.close()
+
         if self.preprocess_param["verbose"]:
             print(
                 f'Mask images saved to {os.path.join(self.intermediate_dir[slide_path]["_mask"], "mask.pdf")}'
