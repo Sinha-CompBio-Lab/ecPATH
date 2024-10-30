@@ -32,6 +32,10 @@ model_path = os.path.join(BASE_DIR, "..", "Data", "Model")
 MLP_model_path = os.path.join(model_path, "MLP")
 LR_model_path = os.path.join(model_path, "LR")
 
+# create directory for input and output if not exist
+os.makedirs(basic_param["input_dir"], exist_ok=True)
+os.makedirs(basic_param["output_dir"], exist_ok=True)
+
 # # check for Data directory if not exist download from zenodo
 # if not os.path.exists(os.path.join(BASE_DIR, "Data")):
 #     print("Data directory not found, downloading from zenodo...")

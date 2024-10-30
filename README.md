@@ -17,8 +17,8 @@
             2.) a visualization of tile selection at `./Prediction/input/SlideKeyword_2/_masks/mask.pdf`
             3.) a tile coordinates list at `./Prediction/input/SlideKeyword_3/_coordinates/tile_coordinates.csv`
         b.) for each analysis:
-            1.) intermediate gene expresion predictions (for each input slide) at ./Prediction/output/{cancer_type}_ecDNA_predictions_{model_name}.csv
-            2.) final ecDNA prediction (for each input slide) at ./Prediction/output/{cancer_type}_gene_expression_predictions_{model_name}.csv
+            1.) intermediate gene expresion predictions (for each input slide) at ./Prediction/output/{cancer_type}_gene_expression_predictions_{model_name}.csv
+            2.) final ecDNA prediction (for each input slide) at ./Prediction/output/{cancer_type}_ecDNA_predictions_{model_name}.csv
         
 
 ## development log
