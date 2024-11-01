@@ -1,0 +1,478 @@
+---
+title: "2_ecPATH_plotting_ecDNA_model_eval_EGFR_model_eval"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Cmd+Shift+Enter*. 
+
+```{r}
+library(data.table)
+library(ggplot2)
+library(ggalt)
+library(dplyr)
+library(reshape2)
+library(tidyr)
+library(fmsb)
+library(pROC)
+library(readr)
+library(stringr)
+library(ggpubr)
+library(ggsignif)
+```
+
+
+```{r}
+
+# ecDNA prediction ROC curves for all TCGA cancer types (from true or predicted expression)
+# Note: main figure for ecDNA predictions display 3 tumor types from these plots (LGG, GBM, and STAD) and supplementary figure displays all as shown here.
+
+
+cancer_types = c("BRCA", "CESC", "ESCA", "GBM", "HNSC", 
+                 "LGG", "LUAD", "LUSC", "STAD")
+model = "LR" 
+
+for (cancer in cancer_types){
+  probability_scores_file_true = read_csv(paste0("../plotting_data/TCGA_",cancer,"_LR_method_mean_ecDNA_predictions_nested_5_fold_200_repeat_on_true_ex_MLP.csv"))
+  colnames(probability_scores_file_true) <- c("sample", "patient_id","ecDNA_positive", "Prediction")
+  
+  probability_scores_file_pred = read_csv(paste0("../plotting_data/TCGA_",cancer,"_LR_method_mean_ecDNA_predictions_nested_5_fold_200_repeat_on_predicted_ex_MLP_uni.csv"))
+  colnames(probability_scores_file_pred) <- c("sample", "patient_id","ecDNA_positive", "Prediction")
+  
+  #### Get all sample and AUC from mean probability of all folds
+  # Compute the ROC curve
+  roc_name_true <- paste("roc_curve_true", cancer, sep = "_")
+  assign(roc_name_true, roc(probability_scores_file_true$ecDNA_positive, probability_scores_file_true$Prediction))
+  
+  roc_name_pred <- paste("roc_curve_pred", cancer, sep = "_")
+  assign(roc_name_pred, roc(probability_scores_file_pred$ecDNA_positive, probability_scores_file_pred$Prediction))
+}
+
+#### Smooth the ROC curves for better visualization
+roc_curve_true_BRCA_smooth = smooth(roc_curve_true_BRCA, method = "density")
+roc_curve_true_CESC_smooth = smooth(roc_curve_true_CESC, method = "density")
+roc_curve_true_ESCA_smooth = smooth(roc_curve_true_ESCA, method = "density")
+roc_curve_true_GBM_smooth = smooth(roc_curve_true_GBM, method = "density")
+roc_curve_true_HNSC_smooth = smooth(roc_curve_true_HNSC, method = "density")
+roc_curve_true_LGG_smooth = smooth(roc_curve_true_LGG, method = "density")
+roc_curve_true_LUAD_smooth = smooth(roc_curve_true_LUAD, method = "density")
+roc_curve_true_LUSC_smooth = smooth(roc_curve_true_LUSC, method = "density")
+roc_curve_true_STAD_smooth = smooth(roc_curve_true_STAD, method = "density")
+
+
+roc_curve_pred_BRCA_smooth = smooth(roc_curve_pred_BRCA, method = "density")
+roc_curve_pred_CESC_smooth = smooth(roc_curve_pred_CESC, method = "density")
+roc_curve_pred_ESCA_smooth = smooth(roc_curve_pred_ESCA, method = "density")
+roc_curve_pred_GBM_smooth = smooth(roc_curve_pred_GBM, method = "density")
+roc_curve_pred_HNSC_smooth = smooth(roc_curve_pred_HNSC, method = "density")
+roc_curve_pred_LGG_smooth = smooth(roc_curve_pred_LGG, method = "density")
+roc_curve_pred_LUAD_smooth = smooth(roc_curve_pred_LUAD, method = "density")
+roc_curve_pred_LUSC_smooth = smooth(roc_curve_pred_LUSC, method = "density")
+roc_curve_pred_STAD_smooth = smooth(roc_curve_pred_STAD, method = "density")
+
+
+
+# Plot ROC curves
+line_width = 1
+line_width1 = 1
+lty_type = 1
+lty_type2 = 6
+colors <- c("#FFA500", "#E58140", "#CC5E80", "#B33AC0" ,"#9B29EF", "#8751ED", "#7378EB","#5FA0E9" ,"#56B4E9")
+cancer_order = c("GBM","LGG","STAD","BRCA","LUAD","LUSC","CESC","ESCA","HNSC")
+
+### Plot true expression ROCs
+plot(roc_curve_true_GBM_smooth, col = colors[1], main = "ROC: LR Predictions of ecDNA status\nTrue Expression", lwd = line_width1, lty = lty_type)
+lines(roc_curve_true_LGG_smooth, col = colors[2], lwd = line_width1, lty = lty_type2)
+lines(roc_curve_true_STAD_smooth, col = colors[3], lwd = line_width1, lty = lty_type)
+lines(roc_curve_true_BRCA_smooth, col = colors[4], lwd = line_width1, lty = lty_type2)
+lines(roc_curve_true_LUAD_smooth, col = colors[5], lwd = line_width1, lty = lty_type)
+lines(roc_curve_true_LUSC_smooth, col = colors[6], lwd = line_width1, lty = lty_type2)
+lines(roc_curve_true_CESC_smooth, col = colors[7], lwd = line_width1, lty = lty_type)
+lines(roc_curve_true_ESCA_smooth, col = colors[8], lwd = line_width1, lty = lty_type2)
+lines(roc_curve_true_HNSC_smooth, col = colors[9], lwd = line_width1, lty = lty_type)
+
+# Add legend
+legend("bottomright", legend = cancer_order, 
+       col = colors, lty = c(lty_type,lty_type2,lty_type,lty_type2,lty_type,lty_type2,lty_type,lty_type2,lty_type), lwd = line_width, title = "tumor type")
+
+### Plot predicted expression ROCs
+plot(roc_curve_pred_GBM_smooth, col = colors[1], main = "ROC: LR Predictions of ecDNA status\nPredicted Expression", lwd = line_width)
+lines(roc_curve_pred_LGG_smooth, col = colors[2], lwd = line_width, lty = lty_type2)
+lines(roc_curve_pred_STAD_smooth, col = colors[3], lwd = line_width, lty = lty_type)
+lines(roc_curve_pred_BRCA_smooth, col = colors[4], lwd = line_width, lty = lty_type2)
+lines(roc_curve_pred_LUAD_smooth, col = colors[5], lwd = line_width, lty = lty_type)
+lines(roc_curve_pred_LUSC_smooth, col = colors[6], lwd = line_width, lty = lty_type2)
+lines(roc_curve_pred_CESC_smooth, col = colors[7], lwd = line_width, lty = lty_type)
+lines(roc_curve_pred_ESCA_smooth, col = colors[8], lwd = line_width, lty = lty_type2)
+lines(roc_curve_pred_HNSC_smooth, col = colors[9], lwd = line_width, lty = lty_type)
+
+# Add legend
+legend("bottomright", legend = cancer_order, 
+       col = colors, lty = c(lty_type,lty_type2,lty_type,lty_type2,lty_type,lty_type2,lty_type,lty_type2,lty_type), lwd = line_width, title = "tumor type")
+
+```
+
+
+```{r}
+# ecDNA prediction radar charts for all TCGA cancer types (from true or predicted expression)
+
+ecDNA_pred_df_no_amplicon = read.table(paste0("../plotting_data/TCGA_all_cancer_all_model_MLP_expression_ecDNA_predictions_for_ecDNA_vs_no_amplicon_uni.txt"), header = T)
+ecDNA_pred_all_samples_df = read.table(paste0("../plotting_data/TCGA_all_cancer_all_model_MLP_expression_ecDNA_mean_predictions_for_all_samples_uni.txt"), header = T)
+
+ecDNA_pred_df_no_amplicon = ecDNA_pred_df_no_amplicon[which(ecDNA_pred_df_no_amplicon$model == "LR"),]
+ecDNA_pred_all_samples_df = ecDNA_pred_all_samples_df[which(ecDNA_pred_all_samples_df$model == "LR"),]
+
+#Some formatting
+colnames(ecDNA_pred_df_no_amplicon) = c("tumor_type","expression_type","model","AUC")
+colnames(ecDNA_pred_all_samples_df) = c("tumor_type","expression_type","model","AUC")
+
+
+ecDNA_pred_df_no_amplicon_m <- as.data.frame(t(dcast(ecDNA_pred_df_no_amplicon, tumor_type ~ expression_type, value.var = "AUC")))
+ecDNA_pred_all_samples_df_m <- as.data.frame(t(dcast(ecDNA_pred_all_samples_df, tumor_type ~ expression_type, value.var = "AUC")))
+
+
+colnames(ecDNA_pred_df_no_amplicon_m) = ecDNA_pred_df_no_amplicon_m[1,]
+colnames(ecDNA_pred_all_samples_df_m) = ecDNA_pred_all_samples_df_m[1,]
+ecDNA_pred_df_no_amplicon_m = ecDNA_pred_df_no_amplicon_m[-c(1),]
+ecDNA_pred_all_samples_df_m = ecDNA_pred_all_samples_df_m[-c(1),]
+
+# Convert the data frame columns to numeric
+ecDNA_pred_df_no_amplicon_m[] <- lapply(ecDNA_pred_df_no_amplicon_m, as.numeric)
+ecDNA_pred_all_samples_df_m[] <- lapply(ecDNA_pred_all_samples_df_m, as.numeric)
+
+
+# Add max and min rows for radar chart scaling
+max_row <- rep(1, ncol(ecDNA_pred_df_no_amplicon_m))
+min_row <- rep(0.0, ncol(ecDNA_pred_df_no_amplicon_m))
+ecDNA_pred_df_no_amplicon_m <- rbind(max_row, min_row, ecDNA_pred_df_no_amplicon_m)
+
+max_row <- rep(1, ncol(ecDNA_pred_all_samples_df_m))
+min_row <- rep(0.0, ncol(ecDNA_pred_all_samples_df_m))
+ecDNA_pred_all_samples_df_m <- rbind(max_row, min_row, ecDNA_pred_all_samples_df_m)
+
+tumor_order = c("LGG", "GBM", "STAD", "BRCA", "LUAD","HNSC","ESCA","CESC","LUSC")
+ecDNA_pred_all_samples_df_m = ecDNA_pred_all_samples_df_m[,c(tumor_order)]
+ecDNA_pred_df_no_amplicon_m = ecDNA_pred_df_no_amplicon_m[,c(tumor_order)]
+
+
+# Plot radar chart of all samples
+par(mfrow = c(1, 1), mar = c(2, 2, 3, 2))
+radarchart(ecDNA_pred_all_samples_df_m, axistype = 1,
+           pcol = c("#7378EB","#E58140"), plwd = 4, plty = 1, 
+           cglcol = "grey", cglty = 1, axislabcol = "grey", 
+           caxislabels = c("0.0","0.25", "0.5", "0.75", "1"), cglwd = 0.8,
+           vlcex = 0.8,
+           title = paste0("AUC LR model prediction of ecDNA status\n(all samples)"))
+
+legend(x = "topright", legend = c("Predicted","True"), 
+       col = c("#7378EB","#E58140"), lty = 1, lwd = 4, bty = "n")
+```
+
+
+```{r}
+#plot radar chart of ecDNA positive vs. no amplicon samples
+# Add a legend
+
+par(mfrow = c(1, 1), mar = c(2, 2, 3, 2))
+radarchart(ecDNA_pred_df_no_amplicon_m, axistype = 1,
+           pcol = c("#7378EB","#E58140"), plwd = 4, plty = 1, 
+           cglcol = "grey", cglty = 1, axislabcol = "grey", 
+           caxislabels = c("0.0","0.25", "0.5", "0.75", "1"), cglwd = 0.8,
+           vlcex = 0.8,
+           title = paste0("AUC LR model prediction of ecDNA status\n(ecDNA positive vs. no amplicon)"))
+
+# Add a legend
+legend(x = "topright", legend = c("Predicted","True"), 
+       col = c("#7378EB","#E58140"), lty = 1, lwd = 4, bty = "n")
+```
+
+
+```{r}
+# Plot ecDNA predictions for all structural categories
+
+input_fn = "../plotting_data/TCGA_all_cancer_all_model_all_expression_from_MLP_variant_categories_and_predictions_for_plotting_uni.txt"
+input_file = read.table(input_fn, header = T)
+
+model_df = input_file[which(input_file$model == "LR"),]
+model_df = model_df[which(model_df$exp_type == "predicted"),]
+
+
+############## Plot a dataframe of all ecDNA positive samples, all no amplicon samples, and then samples that are ecDNA negative but have other structural variants (some samples can be in multiple categories)
+plot_df = model_df
+plot_df$variant <- str_replace_all(plot_df$variant, "_", " ")
+
+# Specify the desired order of the x-axis categories
+desired_order <- c("ecDNA", "Linear Amplification", "BFB", "Complex non cyclic", "no amplicon")
+
+# Convert variant to a factor with the specified order
+plot_df$variant <- factor(plot_df$variant, levels = desired_order)
+plot_df$tumor_type <- factor(plot_df$tumor_type, levels = c("LGG","GBM","STAD","BRCA", "LUAD", "HNSC","ESCA","CESC","LUSC"))
+
+colors = c("#FFA500", "#CC5E80", "#9B29EF", "#698CEA" ,"#56B4E9")
+plot_variant_ecDNA_score <- ggplot(plot_df, aes(x = variant, y = probability_output, fill = variant)) +
+  geom_boxplot(outlier.size = 0.5) +
+  facet_wrap(~ tumor_type, scales = "free_y") +
+  labs(title = paste0("ecDNA scores: LR on predicted expression"),
+       x = "Variant Type",
+       y = "ecDNA Prediction Score") +
+  theme_classic() +
+  scale_fill_manual(values = colors, guide = FALSE) +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1),
+        legend.position = "none") +
+  stat_compare_means(label = "p.signif", method = "wilcox.test", 
+                     ref.group = "ecDNA", vjust = 0.4, hide.ns = T,
+                     color = "red")
+
+# Print the plot
+print(plot_variant_ecDNA_score)
+```
+
+
+```{r}
+
+### Plot ecDNA negative, positive, and no amplicon per TCGA tumor category
+
+tumor_types = unique(model_df$tumor_type)
+pos_neg_no_amp_df = data.frame()
+
+
+for (tumor in tumor_types){
+  model_tumor_df = model_df[which(model_df$tumor_type == tumor),]
+  ecDNA_positive_samples = unique(model_tumor_df[which(model_tumor_df$variant == "ecDNA"),c("sample","tumor_type","probability_output")])
+  ecDNA_negative_samples = unique(model_tumor_df[which(model_tumor_df$variant %in% c("BFB","Linear_Amplification","Complex_non_cyclic","BFB","no_amplicon")),c("sample","tumor_type","probability_output")])
+  ecDNA_no_amplicon_samples = unique(model_tumor_df[which(model_tumor_df$variant == "no_amplicon"),c("sample","tumor_type","probability_output")])
+  
+  ecDNA_positive_samples$category = "ecDNA positive"
+  ecDNA_negative_samples$category = "ecDNA negative"
+  ecDNA_no_amplicon_samples$category = "no amplicon"
+  
+  tumor_df = as.data.frame(rbind(ecDNA_positive_samples, ecDNA_negative_samples, ecDNA_no_amplicon_samples))
+  pos_neg_no_amp_df = as.data.frame(rbind(pos_neg_no_amp_df, tumor_df))
+}
+
+plot2_df = pos_neg_no_amp_df
+
+# Specify the desired order of the x-axis categories
+desired_order2 <- c("ecDNA positive", "ecDNA negative", "no amplicon")
+
+# Convert variant to a factor with the specified order
+plot2_df$category <- factor(plot2_df$category, levels = desired_order2)
+plot2_df$tumor_type <- factor(plot2_df$tumor_type, levels = c("LGG","GBM","STAD","BRCA", "LUAD", "HNSC","ESCA","CESC","LUSC"))
+
+plot_ecDNA_score_ecDNA_status <- ggplot(plot2_df, aes(x = category, y = probability_output, fill = category)) +
+  geom_boxplot(outlier.size = 0.5) +
+  facet_wrap(~ tumor_type, scales = "free_y") +
+  labs(title = paste0("ecDNA scores: LR on predicted expression"),
+       x = "Sample Type",
+       y = "ecDNA Prediction Score") +
+  theme_classic() +
+  scale_fill_manual(values = colors, guide = FALSE) +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1),
+        legend.position = "none") +
+  stat_compare_means(label = "p.signif", method = "wilcox.test", 
+                     ref.group = "ecDNA positive", vjust = 0.4, hide.ns = T,
+                     color = "red")
+
+
+print(plot_ecDNA_score_ecDNA_status)
+
+
+```
+
+
+```{r}
+
+### Benchmarking ML models with true and predicted expression
+
+out_df_all_sample = read.table("../plotting_data//TCGA_all_cancer_all_model_AUC_MLP_expression_ecDNA_mean_predictions_for_all_samples_uni.txt", header = T)
+
+out_df_all_sample$cancer = factor(out_df_all_sample$cancer, levels = c("LGG","GBM","STAD","BRCA","LUAD","HNSC","ESCA","CESC","LUSC"))
+
+plot_all_samples_lollipop <- ggplot(out_df_all_sample, aes(x = model, y = AUC_all_sample, color = expression_type)) +
+  geom_linerange(aes(ymin = 0, ymax = AUC_all_sample), position = position_dodge(width = 0.7), size = 1) +
+  geom_point(aes(y = AUC_all_sample), position = position_dodge(width = 0.7), size = 3) +
+  ylim(0, 1.0) +
+  geom_text(aes(label = sprintf("%.2f", AUC_all_sample)), position = position_dodge(width = 0.7), vjust = 0, angle = 90, hjust = -0.2, show_guide=F) +
+  labs(title = "TCGA all sample mean prediction prob. AUC", x = "", y = "AUC", color = "Expression") +
+  theme_minimal() +
+  scale_color_manual(values = c("#7378EB","#E58140")) +
+  facet_wrap(~ cancer) + # Facet by 'cancer'
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1))
+
+print(plot_all_samples_lollipop)
+
+```
+
+
+```{r}
+
+### Benchmarking ecPATH against Resnet expression and direct models
+
+model_performances_fn = "../plotting_data/Benchmarking_TCGA_ecDNA_predictions_by_model.txt"
+
+output_df = read.table(model_performances_fn, header = T)
+
+output_df$ecPATH = as.numeric(output_df$UNI_MLP_auc)
+output_df$UNI_direct = as.numeric(output_df$Uni_direct_auc)
+output_df$Resnet_expression = as.numeric(output_df$Resnet_MLP_auc)
+output_df$Resnet_direct = as.numeric(output_df$Resnet_direct_auc)
+
+desired_order <- c("GBM","LGG","STAD","LUAD", "LUSC", "CESC","BRCA","HNSC","ESCA")
+
+
+long_auc_df <- output_df %>%
+  pivot_longer(cols = c(ecPATH, UNI_direct, Resnet_expression, Resnet_direct),
+               names_to = "Model",
+               values_to = "AUC") %>%
+  mutate(cancer_type = factor(cancer_type, levels = desired_order))
+
+desired_model_order <- c("ecPATH", "Resnet_expression", "UNI_direct", "Resnet_direct")
+long_auc_df$Model <- factor(long_auc_df$Model, levels = desired_model_order)
+
+# Create the lollipop plot with ggplot2
+lollipop_plot <- ggplot(long_auc_df, aes(x = Model, y = AUC, color = Model)) +
+  geom_segment(aes(x = Model, xend = Model, y = 0, yend = AUC), 
+               size = 1.2) +  # Line for the lollipop
+  geom_point(size = 4) +  # Circle at the top of the lollipop
+  geom_text(aes(label = round(AUC, 3)), 
+            vjust = -1.0, size = 3, color = "black") +  # Change text color to black
+  # Alternative approach using nudge_y
+  # geom_text(aes(label = round(AUC, 3)), nudge_y = 0.05, size = 3, color = "black")  # Use nudge_y to move text higher
+  facet_wrap(~ cancer_type) +  # Facet by cancer type
+  scale_color_manual(values = c("#FFA500", "#CC5E80", "#9B29EF" ,"#56B4E9")) +
+  theme_minimal() +  # Minimal theme for a clean look
+  ylim(0, 1.00) +  # Set y-axis limits
+  labs(title = "AUC by Model and Cancer Type",
+       x = "Model",
+       y = "AUC") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),  # Rotate x-axis labels
+        legend.position = "none")  # Remove legend since facet labels are sufficient
+
+# Print the lollipop plot
+print(lollipop_plot)
+
+
+```
+
+
+```{r}
+
+## EGFR ROC curve on only positive samples or including predictions of model on ecDNA negative samples (All samples)
+ecDNA_pos_and_neg_pred_df = read.csv("../plotting_data/EGFR_pos_neg_ecDNA_neg_mean_predictions.csv", sep = "\t", header=T) #with predictions from ecDNA negative samples
+ecDNA_pos_pred_df = read.csv("../plotting_data/EGFR_predictions_on_all_cancer_types.csv")
+set.seed(123)
+
+new_df = ecDNA_pos_and_neg_pred_df
+cancer_df = ecDNA_pos_pred_df
+
+#ROC plot with ecDNA negative samples
+new_df = as.data.frame(new_df)
+new_df$status = 1
+new_df[which(new_df$EGFR_status %in% c("EGFR neg, ecDNA pos", "ecDNA neg")), "status"] = 0
+
+roc_pos <- roc(cancer_df$EGFR_status, cancer_df$mean_prediction)
+roc_w_neg = roc(new_df$status, new_df$mean_prediction)
+roc_pos_smooth = smooth(roc_pos, method = "density")
+roc_w_neg_smooth = smooth(roc_w_neg, method = "density")
+auc_pos <- auc(roc_pos)
+auc_w_neg <- auc(roc_w_neg)
+all_pos_n = nrow(cancer_df)
+all_n = nrow(new_df)
+
+# Create a combined ROC plot
+plot(roc_pos_smooth, col = "#9B29EF", lwd = 2, main = paste0("ROC of EGFR status"))
+plot(roc_w_neg_smooth, col = "#FFA500", lwd = 2, add = TRUE)
+
+# Add AUC values to the legend
+legend("bottomright", legend = c(paste0("ecDNA pos samples (AUC = ", round(auc_pos, 2), ", n = ", all_pos_n,")"),
+                                 paste0("All samples (AUC = ", round(auc_w_neg, 2), ", n = ", all_n,")")),
+       col = c("#9B29EF", "#FFA500"), lwd = 2)
+
+
+```
+
+
+```{r}
+### Plot EGFR prediction scores for EGFR positive, negative, and samples, ecDNA negative, and ecDNA negative with EGFR high copy number
+
+EGFR_df1 = read.table("../plotting_data/EGFR_score_for_ecDNA_pos_neg_EGFR_CN_samples.txt", header = T, sep = "\t")
+
+EGFR_plot1 = ggplot(EGFR_df1, aes(x = as.factor(EGFR_status), y = mean_prediction, fill = as.factor(EGFR_status))) + 
+  geom_boxplot() + 
+  theme_classic() + 
+  scale_fill_manual(values = c("#FFA500", "#CC5E80","#9B29EF", "#56B4E9")) + 
+  labs(
+    title = "EGFR Prediction Score by Patient",
+    x = "EGFR Status",
+    y = "EGFR ecDNA Prediction Score",
+    fill = "EGFR Status"
+  ) + 
+  theme(legend.position = "none") + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  geom_signif(
+    comparisons = list(c("ecDNA neg", "EGFR pos, ecDNA pos"),
+                       c("EGFR neg, ecDNA pos", "EGFR pos, ecDNA pos"),
+                       c("ecDNA neg, EGFR CN high", "EGFR pos, ecDNA pos")),
+    map_signif_level = TRUE, 
+    textsize = 6,
+    color = "red",
+    y_position = c(0.6, 0.65, 0.7)
+  )
+
+
+print(EGFR_plot1)
+```
+
+
+```{r}
+
+### Plot EGFR prediction scores for other categories (EGFR copy number low, medium and high)
+
+EGFR_levels_w_pred_df = read.table("../plotting_data/EGFR_predictions_for_EGFR_CN_categories.txt", header = T, sep = "\t")
+
+colors <- c("#FFA500", "#CC5E80", "#B33AC0" ,"#9B29EF", "#7378EB","#5FA0E9" ,"#56B4E9")
+EGFR_plot2 = ggplot(EGFR_levels_w_pred_df, aes(x = as.factor(new_EGFR_status), y = mean_prediction, fill = as.factor(new_EGFR_status))) + 
+  geom_boxplot() + 
+  theme_classic() +
+  scale_fill_manual(values = colors) +
+  labs(
+    title = "EGFR Prediction Score by Patient",
+    x = "EGFR Status",
+    y = "Patient Prediction Score",
+    fill = "EGFR Status"
+  ) + 
+  theme(
+    legend.position = "none",
+    axis.text.x = element_text(angle = 45, hjust = 1) # Rotate x-axis labels by 45 degrees
+  )+
+  geom_signif(
+    comparisons = list(
+      c("ecDNA neg, EGFR CN high", "EGFR pos, ecDNA pos, EGFR CN high"), 
+      c("ecDNA neg, EGFR CN low", "EGFR pos, ecDNA pos, EGFR CN high"),
+      c("ecDNA neg, EGFR CN medium", "EGFR pos, ecDNA pos, EGFR CN high"),
+      c("EGFR neg, ecDNA pos, EGFR CN high", "EGFR pos, ecDNA pos, EGFR CN high"),
+      c("EGFR neg, ecDNA pos, EGFR CN low", "EGFR pos, ecDNA pos, EGFR CN high"),
+      c("EGFR neg, ecDNA pos, EGFR CN medium", "EGFR pos, ecDNA pos, EGFR CN high")
+    ),
+    map_signif_level = c("***" = 0.001, "**" = 0.01, "*" = 0.05), # Only show significant comparisons
+    textsize = 6,
+    color = "red",
+    y_position = c(0.55,0.6, 0.65, 0.7, 0.75, 0.8) # Adjust positions as needed
+  )
+
+print(EGFR_plot2)
+
+```
+
+
+```{r}
+
+```
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Cmd+Option+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Cmd+Shift+K* to preview the HTML file). 
+
+The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
+

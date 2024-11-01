@@ -6,6 +6,9 @@
 !.gitignore
 !*.yml
 !README.md
+!*Rmd
+!*html
+!/Figure_Reproduce/*
 
 # Don't ignore Python files
 !*.py

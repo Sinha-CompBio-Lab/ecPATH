@@ -1,0 +1,341 @@
+---
+title: "1_ecPATH_plotting_MLP_and_true_exp_ecDNA"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Cmd+Shift+Enter*. 
+
+```{r}
+library(data.table)
+library(ggplot2)
+library(ggalt)
+library(dplyr)
+library(reshape2)
+library(tidyr)
+library(fmsb)
+library(pROC)
+```
+
+
+```{r}
+
+# Plot total number of significant genes and Pearson correlations for UNI or Resnet
+
+feature_ex_method = "uni" #"uni" or "Resnet"
+
+output_Pearson_plot_corr_data_fn = paste0("../plotting_data/TCGA_MLP_all_cancer_prediction_results_total_sig_genes_",feature_ex_method, ".txt")
+output_Pearson_plot_sig_data_fn = paste0("../plotting_data/TCGA_MLP_all_cancer_prediction_gene_correlations_",feature_ex_method, ".txt")
+
+All_Pearson_corr_df = as.data.frame(read.table(output_Pearson_plot_corr_data_fn, header = T, sep = "\t"))
+All_Pearson_sig_df = as.data.frame(read.table(output_Pearson_plot_sig_data_fn, header = T, sep = "\t"))
+
+order_df <- data.frame(
+  cancer_type = All_Pearson_sig_df$cancer_type  # Desired order
+)
+
+All_Pearson_corr_df$cancer_type <- factor(All_Pearson_corr_df$cancer_type, levels = order_df$cancer_type)
+All_Pearson_sig_df$cancer_type <- factor(All_Pearson_sig_df$cancer_type, levels = order_df$cancer_type)
+
+custom_palette <- colorRampPalette(c("orange", "purple", "#56b4e9"))(16)
+
+
+print("plotting")
+# Create the violin plot
+pearson_corr_plot <- ggplot(All_Pearson_corr_df, aes(x = cancer_type, y = correlation, fill = cancer_type)) +
+  geom_violin(trim = FALSE) + 
+  geom_boxplot(width=0.1, color="black", fill="white", alpha=1, outlier.shape = NA) +
+  geom_hline(yintercept = 0.4, color = "red", linetype = "dashed", size = 1) + # Add red dashed line at y = 0.4
+  labs(title = paste0("MLP prediction Pearson corr (",feature_ex_method,")"),
+       x = "Cancer Type",
+       y = "Correlation") +
+  theme_classic() + scale_fill_manual(values = custom_palette) +  # Use a Viridis color palette for more variety
+  theme(axis.text.x = element_text(angle = 45, hjust = 1), legend.position = "none")
+
+
+Pearson_sig_plot <- ggplot(All_Pearson_sig_df, aes(x = cancer_type, y = sig_genes, fill = cancer_type)) +
+  geom_bar(stat = "identity", width = 0.7) +  # Draw the bars
+  geom_text(aes(label = sig_genes), vjust = -0.3, size = 3.5) +  # Add labels above the bars
+  labs(title = paste0("Number of Significant Genes predicted ",feature_ex_method), subtitle ="Pearson p-adj < 0.05 and corr > 0.4",
+       x = "Cancer Type",
+       y = "Number of Significant Genes") +
+  ylim(0,13000) +
+  theme_classic() + scale_fill_manual(values = custom_palette) +  # Use a Viridis color palette for more variety
+  theme(axis.text.x = element_text(angle = 45, hjust = 1), legend.position = "none")
+
+print(pearson_corr_plot)
+print(Pearson_sig_plot)
+All_Pearson_corr_df = data.frame()
+
+```
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Cmd+Option+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Cmd+Shift+K* to preview the HTML file). 
+
+The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
+```{r}
+# Plot UNI samples vs predicted genes. Plot comparison between Resnet and UNI predicted genes
+
+Uni_sig_data_fn = "../plotting_data/TCGA_MLP_all_cancer_prediction_gene_correlations_uni.txt"
+Resnet_sig_data_fn = "../plotting_data/TCGA_MLP_all_cancer_prediction_gene_correlations_Resnet.txt"
+
+Uni_df = read.table(Uni_sig_data_fn, sep = "\t", header = T)
+Resnet_df = read.table(Resnet_sig_data_fn, sep = "\t", header = T)
+
+Resnet_df$slides <- as.numeric(gsub(".*\\((\\d+)\\).*", "\\1", Resnet_df$cancer_type))
+Uni_df$slides <- as.numeric(gsub(".*\\((\\d+)\\).*", "\\1", Uni_df$cancer_type))
+
+cor_test = cor.test(Uni_df$slides, Uni_df$sig_genes, method = "pearson")
+
+# Extract the correlation coefficient and p-value
+r_value <- round(cor_test$estimate, 2)
+p_value <- format.pval(cor_test$p.value, digits = 2, eps = 0.001)
+
+# Create scatter plot with Pearson correlation coefficient and p-value
+plot_uni_sample_vs_pred <- ggplot(Uni_df, aes(x = slides, y = sig_genes)) +
+  geom_point(size = 3) +
+  geom_smooth(method = "lm", se = FALSE, color = "blue") +
+  labs(title = "",
+       x = "Samples",
+       y = "Total Predicted Genes") +
+  theme_classic() +
+  annotate("text", x = Inf, y = Inf, label = paste("Pearson's R:", r_value, "\nP-value:", p_value),
+           hjust = 1.1, vjust = 2, size = 5)
+
+# Print the plot
+print(plot_uni_sample_vs_pred)
+
+```
+
+
+```{r}
+
+#Plot comparison between Resnet and UNI predicted genes
+
+Uni_df = Uni_df[,c("cancer_type","sig_genes")]
+Resnet_df = Resnet_df[,c("cancer_type","sig_genes")]
+
+colnames(Uni_df) = c("cancer_type","UNI")
+colnames(Resnet_df) = c("cancer_type","Resnet50")
+
+merge_df = merge(Uni_df, Resnet_df, by = "cancer_type")
+
+merge_df$difference = merge_df$UNI-merge_df$Resnet50
+merge_df = merge_df[order(merge_df$UNI, decreasing = F),]
+merge_df$cancer_type = factor(merge_df$cancer_type, levels = merge_df$cancer_type)
+print(merge_df)
+
+# Create the dumbbell plot
+compare_plot = ggplot(merge_df, aes(y = cancer_type)) + 
+  geom_dumbbell(aes(x = `Resnet50`, xend = UNI), 
+                color = "gray", 
+                size = 1) + 
+  geom_point(aes(x = `Resnet50`, color = "Resnet50"), size = 4) +
+  geom_point(aes(x = UNI, color = "UNI"), size = 4) +
+  geom_text(aes(x = (`Resnet50` + UNI)/2, label = paste0(difference)), 
+            color = "black", size = 3, vjust = -0.5) +
+  labs(
+       x = "Total Genes Predicted (Pearson's R > 0.4, P < 0.05)",
+       y = "Cancer Type") +
+  scale_color_manual(name = "Model", values = c("Resnet50" = "orange", "UNI" = "purple")) +
+  theme_classic()
+
+
+print(compare_plot)
+
+```
+
+
+```{r}
+
+# Compare ML models using true gene expression for ecDNA prediction
+
+ecDNA_pred_all_samples_df = read.table(paste0("../plotting_data/TCGA_all_cancer_all_model_AUC_all_samples_true_exp_all_genes.txt"), header = T)
+tumor_order = c("LGG", "GBM", "STAD", "BRCA", "LUAD","HNSC","ESCA","CESC","LUSC")
+ecDNA_pred_all_samples_df = ecDNA_pred_all_samples_df [which(ecDNA_pred_all_samples_df$cancer %in% tumor_order),]
+
+average_auc_all <- as.data.frame(ecDNA_pred_all_samples_df %>%
+  group_by(expression_type, model) %>%
+  summarise(average_AUC = mean(AUC_all_sample)))
+
+plot_avg_all_cancers = ggplot(average_auc_all, aes(x = model, y = average_AUC, color = model)) +
+  geom_segment(aes(x = model, xend = model, y = 0, yend = average_AUC), 
+               position = position_dodge(width = 0.9), 
+               size = 1) +
+  geom_point(aes(color = model), 
+             position = position_dodge(width = 0.9), 
+             size = 4) +
+  geom_text(aes(label = round(average_AUC, 2)), 
+            position = position_dodge(width = 0.9), 
+            hjust = -0.3) +
+  labs(title = "Average AUC by Model\nAll cancers, measured expression",
+       x = "Model",
+       y = "Average AUC") +
+  coord_flip() + ylim(0,0.9) +
+  scale_color_manual(values = c("#FFA500", "#CC5E80", "#9B29EF", "#698CEA" ,"#56B4E9")) +
+  theme_classic() + theme(legend.position = "none")
+
+print(plot_avg_all_cancers)
+```
+```{r}
+out_df_all_sample = ecDNA_pred_all_samples_df
+out_df_all_sample$cancer = factor(out_df_all_sample$cancer, levels = c("LGG","GBM","STAD","BRCA","LUAD","HNSC","ESCA","CESC","LUSC"))
+colors <- c("#FFA500", "#E58140", "#CC5E80", "#B33AC0" ,"#9B29EF", "#8751ED", "#7378EB","#5FA0E9" ,"#56B4E9")
+
+plot_all_samples_all_model_AUC_true_exp <- ggplot(out_df_all_sample, aes(x = model, y = AUC_all_sample, color = model)) +
+  geom_linerange(aes(ymin = 0, ymax = AUC_all_sample), position = position_dodge(width = 0.7), size = 1) +
+  geom_point(aes(y = AUC_all_sample), position = position_dodge(width = 0.7), size = 3) +
+  ylim(0, 1.0) +
+  geom_text(aes(label = sprintf("%.2f", AUC_all_sample)), position = position_dodge(width = 0.7), vjust = 0, angle = 90, hjust = -0.2, show_guide=F) +
+  labs(title = "TCGA all sample mean prediction prob. AUC", x = "", y = "AUC", color = "Expression") +
+  theme_minimal() +
+  scale_color_manual(values = colors) +
+  facet_wrap(~ cancer) + # Facet by 'cancer'
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1))
+
+print(plot_all_samples_all_model_AUC_true_exp)
+```
+
+
+```{r}
+
+#Plot radar plots of true expression
+
+ecDNA_pred_df_no_amplicon = read.table(paste0("../plotting_data/TCGA_all_cancer_all_model_AUC_ecDNA_vs_no_amplicon_true_exp_all_genes.txt"), header = T)
+
+ecDNA_pred_df_no_amplicon = ecDNA_pred_df_no_amplicon[which(ecDNA_pred_df_no_amplicon$cancer %in% tumor_order),]
+ecDNA_pred_all_samples_df = ecDNA_pred_all_samples_df [which(ecDNA_pred_all_samples_df$cancer %in% tumor_order),]
+
+average_auc_no_amplicon <- as.data.frame(ecDNA_pred_df_no_amplicon %>%
+  group_by(expression_type, model) %>%
+  summarise(average_AUC = mean(AUC_ecDNA_no_amplicon)))
+
+
+ecDNA_pred_df_no_amplicon = ecDNA_pred_df_no_amplicon[which(ecDNA_pred_df_no_amplicon$model == "LR"),]
+ecDNA_pred_all_samples_df = ecDNA_pred_all_samples_df[which(ecDNA_pred_all_samples_df$model == "LR"),]
+
+#Some formatting
+colnames(ecDNA_pred_df_no_amplicon) = c("tumor_type","expression_type","model","AUC")
+colnames(ecDNA_pred_all_samples_df) = c("tumor_type","expression_type","model","AUC")
+
+
+ecDNA_pred_df_no_amplicon_m <- as.data.frame(t(dcast(ecDNA_pred_df_no_amplicon, tumor_type ~ expression_type, value.var = "AUC")))
+ecDNA_pred_all_samples_df_m <- as.data.frame(t(dcast(ecDNA_pred_all_samples_df, tumor_type ~ expression_type, value.var = "AUC")))
+
+colnames(ecDNA_pred_df_no_amplicon_m) = ecDNA_pred_df_no_amplicon_m[1,]
+colnames(ecDNA_pred_all_samples_df_m) = ecDNA_pred_all_samples_df_m[1,]
+ecDNA_pred_df_no_amplicon_m = ecDNA_pred_df_no_amplicon_m[-c(1),]
+ecDNA_pred_all_samples_df_m = ecDNA_pred_all_samples_df_m[-c(1),]
+
+# Convert the data frame columns to numeric
+ecDNA_pred_df_no_amplicon_m[] <- lapply(ecDNA_pred_df_no_amplicon_m, as.numeric)
+ecDNA_pred_all_samples_df_m[] <- lapply(ecDNA_pred_all_samples_df_m, as.numeric)
+
+# Add max and min rows for radar chart scaling
+max_row <- rep(1, ncol(ecDNA_pred_df_no_amplicon_m))
+min_row <- rep(0.0, ncol(ecDNA_pred_df_no_amplicon_m))
+ecDNA_pred_df_no_amplicon_m <- rbind(max_row, min_row, ecDNA_pred_df_no_amplicon_m)
+
+max_row <- rep(1, ncol(ecDNA_pred_all_samples_df_m))
+min_row <- rep(0.0, ncol(ecDNA_pred_all_samples_df_m))
+ecDNA_pred_all_samples_df_m <- rbind(max_row, min_row, ecDNA_pred_all_samples_df_m)
+
+
+ecDNA_pred_all_samples_df_m = ecDNA_pred_all_samples_df_m[,c(tumor_order)]
+ecDNA_pred_df_no_amplicon_m = ecDNA_pred_df_no_amplicon_m[,c(tumor_order)]
+
+
+par(mfrow = c(1, 1), mar = c(2, 2, 3, 2))
+radarchart(ecDNA_pred_all_samples_df_m, axistype = 1,
+           pcol = c("#E58140"), plwd = 4, plty = 1, 
+           cglcol = "grey", cglty = 1, axislabcol = "grey", 
+           caxislabels = c("0", "0.25", "0.5", "0.75", "1"), cglwd = 0.8,
+           vlcex = 0.8,
+           title = paste0("AUC LR model\n(all samples)"))
+
+
+```
+
+
+```{r}
+# Radar chart of AUC for ecDNA prediction from measured expression for ecDNA positive vs. no amplicon
+
+par(mfrow = c(1, 1), mar = c(2, 2, 3, 2))
+radarchart(ecDNA_pred_df_no_amplicon_m, axistype = 1,
+         pcol = c("#E58140"), plwd = 4, plty = 1, 
+         cglcol = "grey", cglty = 1, axislabcol = "grey", 
+         caxislabels = c("0", "0.25", "0.5", "0.75", "1"), cglwd = 0.8,
+         vlcex = 0.8,
+         title = paste0("AUC LR model\n(ecDNA positive vs. no amplicon)"))
+
+
+```
+
+
+```{r}
+
+#Plot true vs. predicted exp univariate AUC for ecDNA status (for genes that can be predicted) 
+
+cancer_types = c("LGG", "GBM", "STAD", "BRCA", "LUAD","HNSC","ESCA","CESC","LUSC")
+
+for (cancer_type in cancer_types){
+  print(cancer_type)
+  all_df = read.table(paste0("../plotting_data/TCGA_",cancer_type,".MLP_uni_pred_and_true_exp_univariate_AUC_per_gene.txt"), header = T)
+  all_df_m = melt(all_df)
+  
+  all_df$avg_pred_true = (all_df$predicted + all_df$true)/2
+  
+  cor_coef <- cor(all_df$predicted, all_df$true)
+  univar_AUC_plot = ggplot(data = all_df, aes(x=predicted, y=true, color=avg_pred_true)) +
+    geom_point(alpha = 0.5) +  # Make the points transparent
+    geom_smooth(method = "lm", se = FALSE, color = "blue") +
+    scale_color_gradient2(low = "red", mid = "orange", high = "blue", midpoint = 0.45) +
+    theme_classic() +
+    annotate("text", x = Inf, y = Inf, label = sprintf("r = %.2f", cor_coef), hjust = 1.1, vjust = 1.1, size = 5, color = "blue") +
+    labs(title = paste0(cancer_type),
+         subtitle = paste0("Genes = ", nrow(all_df)),
+         x = "predicted expression AUC",
+         y = "true expression AUC",
+         color = "Average AUC") + theme(legend.position = "none")
+  
+  print(univar_AUC_plot)
+}
+
+```
+
+
+```{r}
+
+
+```
+
+
+
+```{r}
+
+```
+
+
+```{r}
+
+
+```
+
+
+```{r}
+```
+
+
+```{r}
+```
+
+
+```{r}
+```
+
+
+```{r}
+```
+
