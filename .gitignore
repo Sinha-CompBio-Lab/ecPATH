@@ -4,11 +4,16 @@
 
 # Don't ignore .gitignore
 !.gitignore
+
+## environment
 !*.yml
 !README.md
 !*Rmd
 !*html
 !/Figure_Reproduce/*
+
+# testing features
+!/Prediction/input/test_features/*
 
 # Don't ignore Python files
 !*.py
