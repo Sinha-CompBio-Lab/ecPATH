@@ -26,11 +26,11 @@
             1.) intermediate gene expresion predictions (for each input slide) at ./Prediction/output/{cancer_type}_gene_expression_predictions_{model_name}.csv
             2.) final ecDNA prediction (for each input slide) at ./Prediction/output/{cancer_type}_ecDNA_predictions_{model_name}.csv
         
-### Development
+## Development
 1. This pipeline is tested on 'Ubuntu 22.04.3 LTS' with GPU available (NVIDIA GeForce RTX 3090).
 2. Conda is needed for environment management. Current pipeline is developed & tested under conda 24.5.0.
 
-#### Development log
+### Development log
 ### 11/06/ 2024 added ecDNA prediction threshold, added google drive data container 
 - Function description:<br />
     i. added threshold for calling ecDNA positive/negative using Youden J statistic threshold
