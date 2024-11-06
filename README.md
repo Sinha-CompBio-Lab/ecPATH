@@ -2,11 +2,8 @@
 # ecPATH: Predicting ecDNA status in Tumors from Histopathology Slide Images
 
 ### Please note:
-1. This pipeline is tested on 'Ubuntu 22.04.3 LTS' with GPU available (NVIDIA GeForce RTX 3090).
-2. Conda is needed for environment management. Current pipeline is developed & tested under conda 24.5.0.
-
-### Attention:
 1. In this initial release, you need to manually download ecPATH model weights from google drive 'https://drive.google.com/file/d/1Hx_0Qy6fQr22uypk_rU0Ms2_GYjQvFNs/view?usp=sharing', decompress it and put entire ***Data*** folder on the top level of this directory.
+2. Our pipeline uses resnet50 model as the default feature extraction agent, to use UNI model, you need to obtain approval (an access token) from [Hugging Face](https://huggingface.co/MahmoodLab/UNI) and copy the access token in Prediction/param.py
 
 ## Usage & Demo:  
 #### 0. Install conda (if needed): [install conda](https://docs.conda.io/projects/conda/en/latest/user-guide/install/index.html)
@@ -29,19 +26,22 @@
             1.) intermediate gene expresion predictions (for each input slide) at ./Prediction/output/{cancer_type}_gene_expression_predictions_{model_name}.csv
             2.) final ecDNA prediction (for each input slide) at ./Prediction/output/{cancer_type}_ecDNA_predictions_{model_name}.csv
         
-## Development log
-### Lihe Liu: 11/06/ 2024 added ecDNA prediction threshold, added google drive data container 
+### Development
+1. This pipeline is tested on 'Ubuntu 22.04.3 LTS' with GPU available (NVIDIA GeForce RTX 3090).
+2. Conda is needed for environment management. Current pipeline is developed & tested under conda 24.5.0.
+
+#### Development log
+### 11/06/ 2024 added ecDNA prediction threshold, added google drive data container 
 - Function description:<br />
     i. added threshold for calling ecDNA positive/negative using Youden J statistic threshold
     ii.added capability of downloding model weights from google drive for testing/reviewing (before Zenodo)
 
-### Lihe Liu: 10/29/ 2024 added gene expression & ecDNA prediction steps: 
+### 10/29/ 2024 added gene expression & ecDNA prediction steps: 
 - Function description:<br />
     1. Performs downstream gene expression prediction and ecDNA prediction.
     2. Will output `./Prediction/output/{cancer_type}_ecDNA_predictions_{model_name}.csv` and `./Prediction/output/{cancer_type}_gene_expression_predictions_{model_name}.csv`
 
-### Lihe Liu: 10/27/ 2024 added preprocessing steps: 
-
+### 10/27/ 2024 added preprocessing steps: 
 - Function description:<br />
     1. Given any input slides placed in `./Prediction/input/`, the program will perform preprocessing.  
         1. creating tiles given the tile size specified in `./Prediction/param.py`.  
