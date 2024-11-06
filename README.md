@@ -3,7 +3,7 @@
 
 ### Please note:
 1. In this initial release, you need to manually download ecPATH model weights from google drive 'https://drive.google.com/file/d/1Hx_0Qy6fQr22uypk_rU0Ms2_GYjQvFNs/view?usp=sharing', decompress it and put entire ***Data*** folder on the top level of this directory.
-2. Our pipeline uses resnet50 model as the default feature extraction agent, to use UNI model, you need to obtain approval (an access token) from [Hugging Face](https://huggingface.co/MahmoodLab/UNI) and copy the access token in Prediction/param.py
+2. Our pipeline uses resnet50 model as the default feature extraction agent, to use UNI model, you need to obtain approval (an access token) from [Hugging Face](https://huggingface.co/MahmoodLab/UNI) and copy the access token in `./Prediction/param.py`
 
 ## Usage & Demo:  
 #### 0. Install conda (if needed): [install conda](https://docs.conda.io/projects/conda/en/latest/user-guide/install/index.html)
