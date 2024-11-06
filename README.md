@@ -1,12 +1,12 @@
 
 # ecPATH: Predicting ecDNA status in Tumors from Histopathology Slide Images
 
-### Note:
+### Please note:
 1. This pipeline is tested on 'Ubuntu 22.04.3 LTS' with GPU available (NVIDIA GeForce RTX 3090).
 2. Conda is needed for environment management. Current pipeline is developed & tested under conda 24.5.0.
 
 ### Attention:
-1. In this initial release, you need to manually download ecPATH model weights from google drive 'https://drive.google.com/drive/folders/1W0sHJD0nRH7EJIB2XrI91XRlsTfLB4mN?usp=sharing' and put entire ***Data*** folder on the top level of this directory.
+1. In this initial release, you need to manually download ecPATH model weights from google drive 'https://drive.google.com/file/d/1Hx_0Qy6fQr22uypk_rU0Ms2_GYjQvFNs/view?usp=sharing', decompress it and put entire ***Data*** folder on the top level of this directory.
 
 ## Usage & Demo:  
 #### 0. Install conda (if needed): [install conda](https://docs.conda.io/projects/conda/en/latest/user-guide/install/index.html)
