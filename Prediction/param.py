@@ -1,15 +1,19 @@
 import os
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DATA_DIR = os.path.join(BASE_DIR, "Data")
 
 MODE = "prediction"  # or "reviewer_test" for testing (skip preprocessing & use test features)
-
-Zenodo_record_id = ""
 
 basic_param = {
     "input_dir": os.path.join(BASE_DIR, "input"),
     "output_dir": os.path.join(BASE_DIR, "output"),
     "cancer_type": "LGG",  # only support ['LGG', 'GBM', 'STAD']
+}
+
+data_cloud_param = {
+    "gcloud_drive": "",
+    "zenodo_record_id": "",
 }
 
 preprocess_param = {
@@ -36,4 +40,9 @@ feature_extraction_param = {
             "login_token": ""
         },  # 'your_login_token' with approved access from huggingface.co
     },
+}
+
+ecDNA_param = {
+    # Youden J statistic threshold for ecDNA prediction
+    "threshold": {"LGG": 0.268, "GBM": 0.226, "STAD": 0.567},
 }

@@ -52,7 +52,7 @@ class preprocess:
     def process_tiles(self):
         for file in self.input_files:
             # filter
-            print(f"Processing {os.path.basename(file)}...")
+            print(f"\n Processing {os.path.basename(file)}...")
 
             feature_save_path = os.path.join(
                 str(self.intermediate_dir[file]["_features"]),

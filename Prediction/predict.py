@@ -4,13 +4,14 @@ import multiprocessing
 import os
 import warnings
 
+# import gdown
+
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 warnings.filterwarnings("ignore", category=UserWarning)
 warnings.filterwarnings("ignore", category=FutureWarning)
 
-from collections import defaultdict
-
-import matplotlib.pyplot as plt
+print("ecPATH is a tool for predicting ecDNA from H&E-stained pathology slides.\n")
+print("Setting up the environment...\n")
 import numpy as np
 import openslide
 import pandas as pd
@@ -21,20 +22,28 @@ from src.ec_dna_pred import ecDNA_Predictor
 from src.gene_expr_pred import GeneExpressionPredictor
 from src.preprocess import preprocess
 from src.utils.utils import get_max_workers
-from src.utils.utils_color_norm import *
-from src.utils.utils_preprocessing import *
+from src.utils.utils_preprocessing import init_random_seed
 
 #
 init_random_seed()
 max_workers = get_max_workers()
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-model_path = os.path.join(BASE_DIR, "..", "Data", "Model")
-MLP_model_path = os.path.join(model_path, "MLP")
-LR_model_path = os.path.join(model_path, "LR")
+MLP_model_path = os.path.join(DATA_DIR, "Model", "MLP")
+LR_model_path = os.path.join(DATA_DIR, "Model", "LR")
+
+if not os.path.exists(MLP_model_path) or not os.path.exists(LR_model_path):
+    warnings.warn("Model weights not found, start downloading now...")
+    if data_cloud_param["zenodo_record_id"] != "":
+        print(
+            f"Please manually download the entire Data folder from {data_cloud_param['gcloud_drive']} and put it in Prediction/ folder"
+        )
+        # gdown.download(data_cloud_param["gcloud_drive"], DATA_DIR, fuzzy=True)
+
 
 # create directory for input and output if not exist
 os.makedirs(basic_param["input_dir"], exist_ok=True)
 os.makedirs(basic_param["output_dir"], exist_ok=True)
+print("Setting up environment Done!\n")
 
 # # check for Data directory if not exist download from zenodo
 # if not os.path.exists(os.path.join(BASE_DIR, "Data")):
@@ -50,7 +59,7 @@ input_files = glob.glob(
 )
 
 print(
-    f'\n A total of {len(input_files)} input files found at {basic_param["input_dir"]} \n'
+    f'A total of {len(input_files)} input files found at {basic_param["input_dir"]} \n'
 )
 
 ###
@@ -59,7 +68,7 @@ if MODE == "reviewer_test":
     print("In reviewer_test mode, skip Preprocessing...\n")
     print("Will use test features provided by the developper\n")
 else:
-    print("Start Preprocessing...\n")
+    print("Start Preprocessing...")
     preprocessing = preprocess(
         BASE_DIR,
         input_files,
@@ -119,9 +128,15 @@ ecDNA_predictions_df = pd.DataFrame(np.mean(ecDNA_predictions, axis=0))
 ecDNA_predictions_df.columns = ["ecDNA_score"]
 ecDNA_predictions_df.index = gene_expr_predictions.index
 ecDNA_predictions_df.index.name = "input_slide"
+ecDNA_predictions_df["ecDNA_prediction"] = (
+    ecDNA_predictions_df["ecDNA_score"]
+    > ecDNA_param["threshold"][basic_param["cancer_type"]]
+)
 ecDNA_predictions_df.to_csv(
     ecDNA_output_path,
     index=True,
     sep=",",
 )
 print(f"Done, ecDNA predictions saved as {ecDNA_output_path}\n")
+
+print("Thanks for using ecPATH!\n")
