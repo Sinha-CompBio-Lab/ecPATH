@@ -1,0 +1,159 @@
+---
+title: "5_ecPATH_plotting_ecDNA_status_by_oncogene_and_benchmarking_performance.Rmd"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Cmd+Shift+Enter*. 
+
+```{r}
+library(ggplot2)
+library(ggpubr)
+library(reshape2)
+```
+
+```{r}
+#Plot ecDNA prediction scores stratified by oncogenes
+colors = c("#377eb8", "#56b4e9",  "#984ea3", "#cc79a7")
+three_cancer_types = "yes"
+
+EGFR_plotting_df = read.table("../plotting_data/ecDNA_predictions_by_EGFR_status.txt", header = T, sep = "\t")
+CDK4_plotting_df = read.table("../plotting_data/ecDNA_predictions_by_CDK4_status.txt", header = T, sep = "\t")
+MDM2_plotting_df = read.table("../plotting_data/ecDNA_predictions_by_MDM2_status.txt", header = T, sep = "\t")
+ERBB2_plotting_df = read.table("../plotting_data/ecDNA_predictions_by_ERBB2_status.txt", header = T, sep = "\t")
+
+if (three_cancer_types == "yes"){
+  EGFR_plotting_df = EGFR_plotting_df[which(EGFR_plotting_df$tumor_type %in% c("LGG","GBM","STAD")),]
+  CDK4_plotting_df = CDK4_plotting_df[which(CDK4_plotting_df$tumor_type %in% c("LGG","GBM","STAD")),]
+  MDM2_plotting_df = MDM2_plotting_df[which(MDM2_plotting_df$tumor_type %in% c("LGG","GBM","STAD")),]
+  ERBB2_plotting_df = ERBB2_plotting_df[which(ERBB2_plotting_df$tumor_type %in% c("LGG","GBM","STAD")),]
+}
+
+
+plot_ecDNA_score_ecDNA_status_EGFR <- ggplot(EGFR_plotting_df, aes(x = category, y = probability_output, fill = category)) +
+  geom_boxplot(outlier.size = 0.5) +
+  facet_wrap(~ tumor_type, scales = "free_y") +
+  labs(title = "ecDNA scores: LR on predicted expression",
+       x = "Sample Type",
+       y = "ecDNA Prediction Score") +
+  theme_classic() +
+  scale_fill_manual(values = colors, guide = FALSE) +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1),
+        legend.position = "none") +
+  stat_compare_means(label = "p.signif", method = "wilcox.test", 
+                     ref.group = "ecDNA positive", vjust = 0.4, hide.ns = TRUE,
+                     color = "red") +
+  # Adding text for sample size above each boxplot
+  stat_summary(fun.data = function(x) data.frame(y = max(x) + 0.05, label = paste0("n = ", length(x))),
+               geom = "text", 
+               position = position_dodge(width = 0.75),
+               size = 3)
+
+plot_ecDNA_score_ecDNA_status_CDK4 <- ggplot(CDK4_plotting_df, aes(x = category, y = probability_output, fill = category)) +
+  geom_boxplot(outlier.size = 0.5) +
+  facet_wrap(~ tumor_type, scales = "free_y") +
+  labs(title = paste0("ecDNA scores: LR on predicted expression"),
+       x = "Sample Type",
+       y = "ecDNA Prediction Score") +
+  theme_classic() +
+  scale_fill_manual(values = colors, guide = FALSE) +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1),
+        legend.position = "none") +
+  stat_compare_means(label = "p.signif", method = "wilcox.test", 
+                     ref.group = "ecDNA positive", vjust = 0.4, hide.ns = T,
+                     color = "red") +
+  # Adding text for sample size above each boxplot
+  stat_summary(fun.data = function(x) data.frame(y = max(x) + 0.05, label = paste0("n = ", length(x))),
+               geom = "text", 
+               position = position_dodge(width = 0.75),
+               size = 3)
+
+plot_ecDNA_score_ecDNA_status_MDM2 <- ggplot(MDM2_plotting_df, aes(x = category, y = probability_output, fill = category)) +
+  geom_boxplot(outlier.size = 0.5) +
+  facet_wrap(~ tumor_type, scales = "free_y") +
+  labs(title = paste0("ecDNA scores: LR on predicted expression"),
+       x = "Sample Type",
+       y = "ecDNA Prediction Score") +
+  theme_classic() +
+  scale_fill_manual(values = colors, guide = FALSE) +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1),
+        legend.position = "none") +
+  stat_compare_means(label = "p.signif", method = "wilcox.test", 
+                     ref.group = "ecDNA positive", vjust = 0.4, hide.ns = T,
+                     color = "red") +
+  # Adding text for sample size above each boxplot
+  stat_summary(fun.data = function(x) data.frame(y = max(x) + 0.05, label = paste0("n = ", length(x))),
+               geom = "text", 
+               position = position_dodge(width = 0.75),
+               size = 3)
+
+plot_ecDNA_score_ecDNA_status_ERBB2 <- ggplot(ERBB2_plotting_df, aes(x = category, y = probability_output, fill = category)) +
+  geom_boxplot(outlier.size = 0.5) +
+  facet_wrap(~ tumor_type, scales = "free_y") +
+  labs(title = paste0("ecDNA scores: LR on predicted expression"),
+       x = "Sample Type",
+       y = "ecDNA Prediction Score") +
+  theme_classic() +
+  scale_fill_manual(values = colors, guide = FALSE) +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1),
+        legend.position = "none") +
+  stat_compare_means(label = "p.signif", method = "wilcox.test", 
+                     ref.group = "ecDNA positive", vjust = 0.4, hide.ns = T,
+                     color = "red") +
+  # Adding text for sample size above each boxplot
+  stat_summary(fun.data = function(x) data.frame(y = max(x) + 0.05, label = paste0("n = ", length(x))),
+               geom = "text", 
+               position = position_dodge(width = 0.75),
+               size = 3)
+
+
+print(plot_ecDNA_score_ecDNA_status_EGFR)
+print(plot_ecDNA_score_ecDNA_status_MDM2)
+print(plot_ecDNA_score_ecDNA_status_CDK4)
+print(plot_ecDNA_score_ecDNA_status_ERBB2)
+
+```
+
+
+```{r}
+#Plot ecPATH benchmarking metrics
+
+all_cancer_perf_fn = "../plotting_data/Benchmarking_TCGA_ecDNA_predictions_by_model_all_performance_metrics.txt"
+
+
+all_cancer_perf_df = read.table(all_cancer_perf_fn, header = T, sep = "\t")
+
+colors = c("#FFA500", "#CC5E80", "#9B29EF", "#698CEA" ,"#56B4E9")
+cancer_types_of_interest = c("LGG","GBM","STAD")
+desired_model_order <- c("ecPATH", "Resnet Expression", "UNI Direct", "Resnet Direct")
+
+all_cancer_perf_df_plotting = all_cancer_perf_df[,-c(which(colnames(all_cancer_perf_df) == "optimal_threshold"))]
+all_cancer_perf_df_plotting = melt(all_cancer_perf_df_plotting, id.vars = c("model","cancer_type"))
+all_cancer_perf_df_plotting$value = as.numeric(all_cancer_perf_df_plotting$value)
+all_cancer_perf_df_plotting$model <- factor(all_cancer_perf_df_plotting$model, levels = desired_model_order)
+three_cancer_perf_df_plotting = all_cancer_perf_df_plotting[which(all_cancer_perf_df_plotting$cancer_type %in% cancer_types_of_interest),]
+
+three_cancer_perf_df_plotting$cancer_type <- factor(three_cancer_perf_df_plotting$cancer_type, levels = c("LGG","GBM","STAD"))
+three_cancer_perf_df_plotting = three_cancer_perf_df_plotting[-c(which(three_cancer_perf_df_plotting$variable %in% c("baseline_auprc","sensitivity"))),]
+
+lollipop_plot6 <- ggplot(three_cancer_perf_df_plotting, aes(x = variable, y = value, color = model)) +
+  geom_linerange(aes(ymin = 0, ymax = value), position = position_dodge(width = 0.7), size = 1) +
+  geom_point(aes(y = value), position = position_dodge(width = 0.7), size = 3) +
+  ylim(0, 1.0) +
+  geom_text(aes(label = sprintf("%.2f", value)), position = position_dodge(width = 0.7), vjust = 0, angle = 90, hjust = -0.2, show_guide=F) +
+  labs(title = "TCGA pred exp performance", x = "", y = "performance", color = "model") +
+  theme_minimal() +
+  scale_color_manual(values = colors) +
+  facet_wrap(~ cancer_type, ncol = 1) + # Facet by 'cancer'
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1))
+
+print(lollipop_plot6)
+```
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Cmd+Option+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Cmd+Shift+K* to preview the HTML file). 
+
+The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
+

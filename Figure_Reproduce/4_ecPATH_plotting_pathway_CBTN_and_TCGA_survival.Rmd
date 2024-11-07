@@ -1,0 +1,413 @@
+---
+title: "4_ecPATH_plotting_pathway_CBTN_and_TCGA_survival.Rmd"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Cmd+Shift+Enter*. 
+
+```{r}
+library(ggplot2)
+library(pROC)
+library(ggsignif)
+library(dplyr)
+library(forcats)
+library(reshape2)
+library(readr)
+library(tidyr)
+library(stringr)
+library(survival)
+library(survminer)
+```
+
+
+```{r}
+#### Plot GSEA results of Reactome pathway enrichment scores
+
+pathway = "C2"
+subcat = "CP:REACTOME"
+min_num_genes_pathway = 20
+cancer_types = c("STAD","LGG","GBM")
+total_pathways = 10
+
+gsea_results_df = read.table("../plotting_data/GSEA_REACTOME_analyais_results_LGG_GBM_STAD.txt", sep = "\t", header = T)
+
+all_results_df = gsea_results_df
+all_results_df$pathway <- sub("^[^_]*_", "", all_results_df$pathway)
+all_results_df$pathway <- gsub("_", " ", all_results_df$pathway)
+all_results_df$log_p = -log10(all_results_df$pval)
+all_results_df$log_q = -log10(all_results_df$padj)
+all_results_df$pathway_wrapped <- str_wrap(all_results_df$pathway, width = 40)
+all_results_df = na.omit(all_results_df)
+all_results_df = all_results_df[,c("pathway_wrapped","log_p", "log_q", "pathway","NES","cancer_type")]
+
+
+# Define the order of the cancer types
+all_results_df = all_results_df[order(all_results_df$log_q, decreasing = F),]
+ordered_cancer_types <- cancer_types
+all_results_df$cancer_type <- factor(all_results_df$cancer_type, levels = ordered_cancer_types)
+
+
+all_results_df$NES = as.numeric(all_results_df$NES)
+
+# Convert cancer_type to a factor with the specified order
+all_results_df <- all_results_df %>%
+  group_by(cancer_type) %>%
+  mutate(pathway_wrapped = factor(pathway_wrapped, levels = pathway_wrapped[order(NES, decreasing = T)])) %>%
+  ungroup()
+
+
+gsea_plot <- ggplot(data = all_results_df) +
+  # Add lollipop lines from 0 to NES
+  geom_segment(aes(x = fct_rev(pathway_wrapped), xend = fct_rev(pathway_wrapped),
+                   y = 0, yend = NES), color = "gray") +
+  # Add points at the end of the lollipop lines
+  geom_point(aes(x = fct_rev(pathway_wrapped), y = NES, 
+                 size = log_q,  # Size based on log(p)
+                 color = NES)) +
+  scale_color_gradient2(name = "NES", low = "blue", high = "red", midpoint = 0) +  # NES color gradient
+  scale_size(name = "-log(q)") +  # Scale for point size
+  labs(title = "", x = "Pathway Names", y = "NES") +  # Adjust x and y labels
+  theme_classic() +  # Use classic theme
+  theme(panel.grid.major.y = element_line(color = "gray80"),  # Add y-axis grid lines
+        panel.grid.major.x = element_line(color = "gray80"),  # Add x-axis grid lines
+        axis.line = element_blank()) +  # Optionally remove axis lines
+  facet_grid(~ cancer_type, scales = "free_y", space = "free_y") +  # Facet by cancer type with free y-axis
+  ggtitle(paste0(pathway, " ", subcat, "\nmin pathway size = ", min_num_genes_pathway, " genes")) +
+  coord_flip()  # Flip coordinates for a horizontal lollipop plot
+
+# Print the plot
+print(gsea_plot)
+
+
+```
+
+
+```{r}
+### Plot Brain model performance on TCGA LGG and GBM samples
+
+cancer = "LGG_GBM"
+ecDNA_output_file = "../plotting_data/TCGA_LGG_GBM_LR_method_mean_ecDNA_predictions_nested_5_fold_200_repeat_on_predicted_ex_MLP_uni_stratified.csv"
+probability_scores_file_pred = read_csv(ecDNA_output_file)
+colnames(probability_scores_file_pred) <- c("sample", "ecDNA_positive", "Prediction")
+
+#### Get all sample and AUC from mean probability of all folds
+# Compute the ROC curve
+roc_name_pred <- paste("roc_curve_pred", cancer, sep = "_")
+auc_name_value <- paste("auc", cancer, sep = "_")
+assign(roc_name_pred, roc(probability_scores_file_pred$ecDNA_positive, probability_scores_file_pred$Prediction))
+assign(auc_name_value, auc(probability_scores_file_pred$ecDNA_positive, probability_scores_file_pred$Prediction))
+
+roc_curve_pred_LGG_GBM_smooth = smooth(roc_curve_pred_LGG_GBM, method = "density")
+
+# Plot ROC curves
+cancer_label = paste0("LGG_GBM (AUC = ",round(auc_LGG_GBM,2),")")
+plot(roc_curve_pred_LGG_GBM_smooth, col = "#377eb8", 
+     main = "ROC: Predictions of ecDNA status\nPredicted Expression", lwd = 2, lty = 1)
+
+# Add legend
+legend("bottomright", legend = cancer_label, 
+       col = c("#377eb8"), lwd = 2)
+
+
+
+```
+
+
+```{r}
+
+# Plot CBTN ROC curve for samples at diagnosis and all samples
+
+patient_level_df = read.table("../plotting_data/CBTN_ecDNA_mean_predictions_from_brain_model_and_true_ecDNA_status.txt", header = T, sep = "\t")
+
+#### ROC for all patients
+cancer_df = patient_level_df[,c("grouped_patient_id","external_sample_id","grouped_cancer_type","ecDNA_status","Mean_Prediction")]
+
+roc <- roc(cancer_df$ecDNA_status, cancer_df$Mean_Prediction)
+all_sample_roc = smooth(roc, method = "density")
+all_sample_auc <- auc(roc)
+all_n = nrow(cancer_df)
+
+### ROC for patients at diagnosis
+stage_df = patient_level_df[,c("grouped_patient_id","grouped_progression_label","ecDNA_status","Mean_Prediction")]
+Diagnosis_df = stage_df[which(stage_df$grouped_progression_label == "Diagnosis"),]
+
+set.seed(123)
+
+diagnosis_roc <- roc(Diagnosis_df$ecDNA_status, Diagnosis_df$Mean_Prediction)
+diagnosis_roc_smooth = smooth(diagnosis_roc, method = "density")
+diagnosis_auc <- auc(diagnosis_roc)
+Diagnosis_n = nrow(Diagnosis_df)
+diagnosis_roc = diagnosis_roc_smooth
+
+# Create a ROC plot of all samples and diagnosis samples
+plot.new()
+plot(all_sample_roc, col = "#7378EB", lwd = 2, main = paste0("ROC: CBTN prediction"))
+plot(diagnosis_roc, col = "#E58140", lwd = 2, add = TRUE)
+
+# Add AUC values to the legend
+legend("bottomright", legend = c(paste0("All samples (AUC = ", round(all_sample_auc, 2), ", n = ", all_n,")"),
+                                 paste0("Diagnosis (AUC = ", round(diagnosis_auc, 2), ", n = ", Diagnosis_n,")")),
+       col = c("#7378EB","#E58140"), lwd = 2)
+
+
+```
+
+
+```{r}
+# Plot ecDNA scores by ecDNA and amplicon category
+
+CBTN_results_df = read.table( "../plotting_data/CBTN_ecDNA_predictions_and_amplicon_categories.txt", sep = "\t", header = T)
+
+merged_results_df = CBTN_results_df
+
+ecDNA_positive_samples = merged_results_df[which(merged_results_df$ecDNA_status == 1),]
+ecDNA_negative_samples = merged_results_df[which(merged_results_df$ecDNA_status == 0),]
+ecDNA_no_amplicon_samples = merged_results_df[which(merged_results_df$no_amplicon == 1),]
+
+ecDNA_positive_samples$category = "ecDNA_positive"
+ecDNA_negative_samples$category = "ecDNA_negative"
+ecDNA_no_amplicon_samples$category = "no_amplicon"
+
+plotting_df1 = as.data.frame(rbind(ecDNA_positive_samples, ecDNA_negative_samples, ecDNA_no_amplicon_samples))
+
+plotting_df1$category = factor(plotting_df1$category, levels=c("ecDNA_positive","ecDNA_negative","no_amplicon"))
+
+plotting_df1$`Average Prediction` = as.numeric(as.character(plotting_df1$`Average.Prediction`))
+colors = c("#FFA500", "#CC5E80", "#9B29EF", "#698CEA" ,"#56B4E9")
+p1 <- ggplot(plotting_df1, aes(x = category, y = plotting_df1$`Average Prediction`, fill = category)) +
+  geom_boxplot(outlier.size = 0.5) +
+  labs(title = paste0("ecDNA scores of CBTM samples\nLogistic Regression brain model"),
+       x = "Sample Type",
+       y = "ecDNA Prediction Score") +
+  theme_classic() +
+  scale_fill_manual(values = colors, guide = FALSE) +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1),
+        legend.position = "none") +
+  stat_compare_means(label = "p.signif", method = "wilcox.test", 
+                     ref.group = "ecDNA_positive", vjust = 0.2, hide.ns = T,
+                     color = "red")
+
+print(p1)
+
+
+```
+
+
+```{r}
+
+### Plot CBTN and TCGA brain model gene expression correlations
+
+brain_model_corr_fn = "../plotting_data/TCGA_LGG_GBM.MLP_pred_coef_pvalue_per_gene.txt"
+CBTN_corr_fn = "../plotting_data/CBTM.MLP_pred_on_LGG_GBM_coef_pvalue_per_gene.txt"
+CBTN_corr_plotting_df = read.table("../plotting_data/CBTN_and_Brain_model_samples_gene_expression_correlations_by_category.txt", sep = "\t", header = T)
+
+brain_model_corr_df = read.table(brain_model_corr_fn, sep = "\t", header = T)
+CBTN_corr_df = read.table(CBTN_corr_fn, sep = "\t", header = T)
+
+total_sig_brain_model_genes = nrow(brain_model_corr_df[which(brain_model_corr_df$Pearson_corr > 0.4 & brain_model_corr_df$Pearson_padj < 0.05),])
+total_sig_CBTN_genes = nrow(CBTN_corr_df[which(CBTN_corr_df$Pearson_corr > 0.4 & CBTN_corr_df$Pearson_padj < 0.05),])
+
+brain_model_corr_df$cohort = "TCGA Brain"
+CBTN_corr_df$cohort = "CBTN"
+
+plotting_df = CBTN_corr_plotting_df
+df = plotting_df[,c("cohort","genes","Pearson_corr")]
+
+df$cohort <- factor(df$cohort, levels = c("TCGA Brain", "CBTN"))  # Order the facets
+df$genes <- factor(df$genes, levels = c("all", "significantly predicted in brain", "ecDNA brain model feature"))  # Order the x-axis
+
+
+df_summary <- df %>%
+  group_by(cohort, genes) %>%
+  summarise(n = n(), .groups = 'drop')
+
+
+## plot gene expression histograms
+plot1 = ggplot(brain_model_corr_df, aes(x = Pearson_corr)) +
+  geom_histogram(binwidth = 0.1, fill = "#56B4E9", color = "black", alpha = 0.7) +
+  geom_vline(xintercept = 0.4, linetype = "dashed", color = "black") +
+  labs(title = paste0("TCGA Brain Model\nTotal sig genes Pearson R > 0.4, P adj < 0.05 = ", total_sig_brain_model_genes), 
+       x = "Pearson Corr (R)", y = "Total Genes") +
+  theme_classic()
+
+plot2 = ggplot(CBTN_corr_df, aes(x = Pearson_corr)) +
+  geom_histogram(binwidth = 0.1, fill = "#CC5E80", color = "black", alpha = 0.7) +
+  geom_vline(xintercept = 0.4, linetype = "dashed", color = "black") +
+  labs(title = paste0("CBTN prediction\nTotal sig genes Pearson R > 0.4, P adj < 0.05 = ", total_sig_CBTN_genes), 
+       x = "Pearson Corr (R)", y = "Total Genes") +
+  theme_classic()
+
+
+# Create the violin plot
+plot3 = ggplot(df, aes(x = genes, y = Pearson_corr, fill = genes)) +
+  geom_violin(trim = FALSE, color = "black", alpha = 0.7) + 
+  geom_boxplot(width = 0.1, fill = "white", color = "black", outlier.shape = NA) +
+  facet_wrap(~ cohort) +  # Facet by cohort with free y-axis scaling
+  theme_classic() +
+  geom_text(data = df_summary, aes(x = genes, y = max(df$Pearson_corr) + 0.05, label = paste("n =", n)),
+            position = position_dodge(width = 0.9), size = 3, vjust = 0) +
+  labs(x = "Genes", y = "Pearson Correlation", fill = "Genes") +
+  theme(
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    strip.background = element_rect(fill = "lightgrey", color = "black"),
+    axis.text.x = element_blank(),  # This line removes the x-axis labels
+    axis.ticks.x = element_blank(),  # This line removes the x-axis ticks
+    legend.position = "bottom"
+  ) + scale_fill_manual(values = c("#FFA500","#9B29EF","#56B4E9")) + xlab("")
+
+
+print(plot1)
+print(plot2)
+print(plot3)
+
+
+
+```
+
+
+```{r}
+
+#### Plot TCGA unlabeled ecDNA predictions - total positive and negative samples
+
+output_total_sample_numbers_df = read.table("../plotting_data/TCGA_LGG_GBM_STAD_ecDNA_predicted_sample_numbers.txt", sep = "\t", header = T)
+
+output_total_sample_numbers_df$total_pos = as.numeric(output_total_sample_numbers_df$total_pos)
+output_total_sample_numbers_df$total_neg = as.numeric(output_total_sample_numbers_df$total_neg)
+
+# Prepare data for stacked bar plot
+df_long <- output_total_sample_numbers_df %>%
+  select(cancer_type, total_pos, total_neg) %>%
+  pivot_longer(cols = c(total_pos, total_neg), names_to = "status", values_to = "count")
+
+df_long$cancer_type = factor(df_long$cancer_type, levels = c("BRCA","LGG","STAD","GBM"))
+# Create the stacked bar plot
+plot_prediction_numbers <- ggplot(df_long, aes(x = cancer_type, y = count, fill = status)) +
+  geom_bar(stat = "identity") +
+  geom_text(aes(label = count), position = position_stack(vjust = 0.5)) +
+  labs(title = "Predicted ecDNA status for TCGA unlabeled samples",
+       x = "", y = "Count", fill = "Status") +
+  theme_classic() +
+  scale_fill_manual(values = c("total_pos"="#8DD3C7","total_neg"="#FB8072"))
+
+# Print the plot
+print(plot_prediction_numbers)
+
+
+```
+
+
+```{r}
+
+#### Plot LGG True and Predicted ecDNA status vs. surival
+
+true_ecDNA_labels_w_survival = read.table("../plotting_data/TCGA_LGG_true_ecDNA_labels_w_survival.txt", header = T, sep = "\t")
+
+## KM plot
+surv_object_true_labels <- Surv(time =  true_ecDNA_labels_w_survival$OS.time, event =  true_ecDNA_labels_w_survival$OS)
+km_fit_true_labels <- survfit(surv_object_true_labels ~ true_ecDNA_labels_w_survival$ecDNA_status, data = true_ecDNA_labels_w_survival)
+
+# Plot the Kaplan-Meier survival curve
+plot_true <- ggsurvplot(km_fit_true_labels, 
+                        data = true_ecDNA_labels_w_survival, 
+                        pval = TRUE,         # Show the p-value on the plot
+                        conf.int = TRUE,     # Add confidence interval
+                        risk.table = TRUE,   # Add risk table below the plot
+                        ggtheme = theme_minimal(), # Use a minimal theme
+                        title = paste0("LGG Kaplan-Meier Survival Curve\n True ecDNA labels"),
+                        xlab = "OS Time",
+                        ylab = "Survival Probability")
+
+
+##### For predicted ecDNA labels:
+
+mean_predictions_df = read.table("../plotting_data/TCGA_LGG_ecDNA_predictions_for_unlabeled_samples.txt", header = T, sep = "\t")
+
+mean_predictions_df$OS.time = as.numeric(mean_predictions_df$OS.time)
+mean_predictions_df$OS = as.numeric(mean_predictions_df$OS)
+
+# Create a Surv object
+surv_object <- Surv(time = mean_predictions_df$OS.time, event = mean_predictions_df$OS)
+
+# Fit a Kaplan-Meier survival curve
+km_fit <- survfit(surv_object ~ mean_predictions_df$ecDNA_label, data = mean_predictions_df)
+
+# Plot the Kaplan-Meier survival curve
+plot_pred <- ggsurvplot(km_fit, 
+                        data = mean_predictions_df, 
+                        pval = TRUE,         # Show the p-value on the plot
+                        conf.int = TRUE,     # Add confidence interval
+                        risk.table = TRUE,   # Add risk table below the plot
+                        ggtheme = theme_minimal(), # Use a minimal theme
+                        title = paste0("LGG Kaplan-Meier Survival Curve\nPredicted Labels"),
+                        xlab = "OS Time",
+                        ylab = "Survival Probability")
+
+
+# Print the p-value
+print(plot_true)
+print(plot_pred)
+
+
+```
+
+
+```{r}
+
+### Plot TCGA hazard ratios for cancer types and survival plot of combined samples
+
+all_predictions_df = read.table("../plotting_data/TCGA_unlabeled_LGG_GBM_STAD_predictions_for_survival_analysis.txt", sep = "\t", header = T)
+hazard_ratios_df = read.table("../plotting_data/TCGA_unlabeled_LGG_GBM_STAD_hazard_ratios_for_survival_analysis.txt", sep = "\t", header = T)
+
+# Forest plot using ggplot2
+hazard_ratios_df$cancer_type = factor(hazard_ratios_df$cancer_type, levels = c("combined cancer types","GBM","STAD","LGG"))
+HR_plot = ggplot(hazard_ratios_df, aes(x = cancer_type, y = hazard_ratio, color = data_type)) +
+  geom_point(size = 3, position = position_dodge(width = 0.5)) +  # Adjust the position of the points
+  geom_errorbar(aes(ymin = lower_CI, ymax = upper_CI), width = 0.2, position = position_dodge(width = 0.5)) +  # Adjust the position of the error bars
+  geom_hline(yintercept = 1, linetype = "dashed", color = "red") +
+  coord_flip() +
+  ylab("Hazard Ratio") +
+  xlab("") +
+  ggtitle("Hazard Ratios with 95% Confidence Intervals") +
+  theme_minimal()
+
+
+# Create a Surv object for all cancer types together
+surv_object_all <- Surv(time = all_predictions_df$OS.time, event = all_predictions_df$OS)
+
+# Fit a Kaplan-Meier survival curve for all cancer types together
+km_fit_all <- survfit(surv_object_all ~ all_predictions_df$ecDNA_label, data = all_predictions_df)
+
+cox_model = coxph(formula = Surv(OS.time, OS) ~ ecDNA_label, data = all_predictions_df)
+summary_cox = summary(cox_model)
+hazard_ratio = summary_cox$coefficients[,"exp(coef)"]
+
+# Plot the Kaplan-Meier survival curve for all cancer types
+plot_pred_all_cancer <- ggsurvplot(km_fit_all, 
+                                   data = all_predictions_df, 
+                                   pval = TRUE,         # Show the p-value on the plot
+                                   conf.int = TRUE,     # Add confidence interval
+                                   risk.table = TRUE,   # Add risk table below the plot
+                                   ggtheme = theme_minimal(), # Use a minimal theme
+                                   title = paste0("All cancer ecDNA predictions Kaplan-Meier Survival Curve\n hazard ratio = ",round(hazard_ratio,3)),
+                                   xlab = "OS Time",
+                                   ylab = "Survival Probability")
+
+
+
+# Print the plots
+print(plot_pred_all_cancer)
+print(HR_plot)
+
+
+```
+
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Cmd+Option+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Cmd+Shift+K* to preview the HTML file). 
+
+The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
+
