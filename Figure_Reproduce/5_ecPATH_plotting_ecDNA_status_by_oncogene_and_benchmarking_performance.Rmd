@@ -18,10 +18,10 @@ library(reshape2)
 colors = c("#377eb8", "#56b4e9",  "#984ea3", "#cc79a7")
 three_cancer_types = "yes"
 
-EGFR_plotting_df = read.table("../plotting_data/ecDNA_predictions_by_EGFR_status.txt", header = T, sep = "\t")
-CDK4_plotting_df = read.table("../plotting_data/ecDNA_predictions_by_CDK4_status.txt", header = T, sep = "\t")
-MDM2_plotting_df = read.table("../plotting_data/ecDNA_predictions_by_MDM2_status.txt", header = T, sep = "\t")
-ERBB2_plotting_df = read.table("../plotting_data/ecDNA_predictions_by_ERBB2_status.txt", header = T, sep = "\t")
+EGFR_plotting_df = read.table("../Data/Figure_Reproduce/ecDNA_predictions_by_EGFR_status.txt", header = T, sep = "\t")
+CDK4_plotting_df = read.table("../Data/Figure_Reproduce/ecDNA_predictions_by_CDK4_status.txt", header = T, sep = "\t")
+MDM2_plotting_df = read.table("../Data/Figure_Reproduce/ecDNA_predictions_by_MDM2_status.txt", header = T, sep = "\t")
+ERBB2_plotting_df = read.table("../Data/Figure_Reproduce/ecDNA_predictions_by_ERBB2_status.txt", header = T, sep = "\t")
 
 if (three_cancer_types == "yes"){
   EGFR_plotting_df = EGFR_plotting_df[which(EGFR_plotting_df$tumor_type %in% c("LGG","GBM","STAD")),]
@@ -119,7 +119,7 @@ print(plot_ecDNA_score_ecDNA_status_ERBB2)
 ```{r}
 #Plot ecPATH benchmarking metrics
 
-all_cancer_perf_fn = "../plotting_data/Benchmarking_TCGA_ecDNA_predictions_by_model_all_performance_metrics.txt"
+all_cancer_perf_fn = "../Data/Figure_Reproduce/Benchmarking_TCGA_ecDNA_predictions_by_model_all_performance_metrics.txt"
 
 
 all_cancer_perf_df = read.table(all_cancer_perf_fn, header = T, sep = "\t")

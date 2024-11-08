@@ -31,7 +31,7 @@ min_num_genes_pathway = 20
 cancer_types = c("STAD","LGG","GBM")
 total_pathways = 10
 
-gsea_results_df = read.table("../plotting_data/GSEA_REACTOME_analyais_results_LGG_GBM_STAD.txt", sep = "\t", header = T)
+gsea_results_df = read.table("../Data/Figure_Reproduce/GSEA_REACTOME_analyais_results_LGG_GBM_STAD.txt", sep = "\t", header = T)
 
 all_results_df = gsea_results_df
 all_results_df$pathway <- sub("^[^_]*_", "", all_results_df$pathway)
@@ -88,7 +88,7 @@ print(gsea_plot)
 ### Plot Brain model performance on TCGA LGG and GBM samples
 
 cancer = "LGG_GBM"
-ecDNA_output_file = "../plotting_data/TCGA_LGG_GBM_LR_method_mean_ecDNA_predictions_nested_5_fold_200_repeat_on_predicted_ex_MLP_uni_stratified.csv"
+ecDNA_output_file = "../Data/Figure_Reproduce/TCGA_LGG_GBM_LR_method_mean_ecDNA_predictions_nested_5_fold_200_repeat_on_predicted_ex_MLP_uni_stratified.csv"
 probability_scores_file_pred = read_csv(ecDNA_output_file)
 colnames(probability_scores_file_pred) <- c("sample", "ecDNA_positive", "Prediction")
 
@@ -119,7 +119,7 @@ legend("bottomright", legend = cancer_label,
 
 # Plot CBTN ROC curve for samples at diagnosis and all samples
 
-patient_level_df = read.table("../plotting_data/CBTN_ecDNA_mean_predictions_from_brain_model_and_true_ecDNA_status.txt", header = T, sep = "\t")
+patient_level_df = read.table("../Data/Figure_Reproduce/CBTN_ecDNA_mean_predictions_from_brain_model_and_true_ecDNA_status.txt", header = T, sep = "\t")
 
 #### ROC for all patients
 cancer_df = patient_level_df[,c("grouped_patient_id","external_sample_id","grouped_cancer_type","ecDNA_status","Mean_Prediction")]
@@ -158,7 +158,7 @@ legend("bottomright", legend = c(paste0("All samples (AUC = ", round(all_sample_
 ```{r}
 # Plot ecDNA scores by ecDNA and amplicon category
 
-CBTN_results_df = read.table( "../plotting_data/CBTN_ecDNA_predictions_and_amplicon_categories.txt", sep = "\t", header = T)
+CBTN_results_df = read.table( "../Data/Figure_Reproduce/CBTN_ecDNA_predictions_and_amplicon_categories.txt", sep = "\t", header = T)
 
 merged_results_df = CBTN_results_df
 
@@ -199,9 +199,9 @@ print(p1)
 
 ### Plot CBTN and TCGA brain model gene expression correlations
 
-brain_model_corr_fn = "../plotting_data/TCGA_LGG_GBM.MLP_pred_coef_pvalue_per_gene.txt"
-CBTN_corr_fn = "../plotting_data/CBTM.MLP_pred_on_LGG_GBM_coef_pvalue_per_gene.txt"
-CBTN_corr_plotting_df = read.table("../plotting_data/CBTN_and_Brain_model_samples_gene_expression_correlations_by_category.txt", sep = "\t", header = T)
+brain_model_corr_fn = "../Data/Figure_Reproduce/TCGA_LGG_GBM.MLP_pred_coef_pvalue_per_gene.txt"
+CBTN_corr_fn = "../Data/Figure_Reproduce/CBTM.MLP_pred_on_LGG_GBM_coef_pvalue_per_gene.txt"
+CBTN_corr_plotting_df = read.table("../Data/Figure_Reproduce/CBTN_and_Brain_model_samples_gene_expression_correlations_by_category.txt", sep = "\t", header = T)
 
 brain_model_corr_df = read.table(brain_model_corr_fn, sep = "\t", header = T)
 CBTN_corr_df = read.table(CBTN_corr_fn, sep = "\t", header = T)
@@ -272,7 +272,7 @@ print(plot3)
 
 #### Plot TCGA unlabeled ecDNA predictions - total positive and negative samples
 
-output_total_sample_numbers_df = read.table("../plotting_data/TCGA_LGG_GBM_STAD_ecDNA_predicted_sample_numbers.txt", sep = "\t", header = T)
+output_total_sample_numbers_df = read.table("../Data/Figure_Reproduce/TCGA_LGG_GBM_STAD_ecDNA_predicted_sample_numbers.txt", sep = "\t", header = T)
 
 output_total_sample_numbers_df$total_pos = as.numeric(output_total_sample_numbers_df$total_pos)
 output_total_sample_numbers_df$total_neg = as.numeric(output_total_sample_numbers_df$total_neg)
@@ -303,7 +303,7 @@ print(plot_prediction_numbers)
 
 #### Plot LGG True and Predicted ecDNA status vs. surival
 
-true_ecDNA_labels_w_survival = read.table("../plotting_data/TCGA_LGG_true_ecDNA_labels_w_survival.txt", header = T, sep = "\t")
+true_ecDNA_labels_w_survival = read.table("../Data/Figure_Reproduce/TCGA_LGG_true_ecDNA_labels_w_survival.txt", header = T, sep = "\t")
 
 ## KM plot
 surv_object_true_labels <- Surv(time =  true_ecDNA_labels_w_survival$OS.time, event =  true_ecDNA_labels_w_survival$OS)
@@ -323,7 +323,7 @@ plot_true <- ggsurvplot(km_fit_true_labels,
 
 ##### For predicted ecDNA labels:
 
-mean_predictions_df = read.table("../plotting_data/TCGA_LGG_ecDNA_predictions_for_unlabeled_samples.txt", header = T, sep = "\t")
+mean_predictions_df = read.table("../Data/Figure_Reproduce/TCGA_LGG_ecDNA_predictions_for_unlabeled_samples.txt", header = T, sep = "\t")
 
 mean_predictions_df$OS.time = as.numeric(mean_predictions_df$OS.time)
 mean_predictions_df$OS = as.numeric(mean_predictions_df$OS)
@@ -358,8 +358,8 @@ print(plot_pred)
 
 ### Plot TCGA hazard ratios for cancer types and survival plot of combined samples
 
-all_predictions_df = read.table("../plotting_data/TCGA_unlabeled_LGG_GBM_STAD_predictions_for_survival_analysis.txt", sep = "\t", header = T)
-hazard_ratios_df = read.table("../plotting_data/TCGA_unlabeled_LGG_GBM_STAD_hazard_ratios_for_survival_analysis.txt", sep = "\t", header = T)
+all_predictions_df = read.table("../Data/Figure_Reproduce/TCGA_unlabeled_LGG_GBM_STAD_predictions_for_survival_analysis.txt", sep = "\t", header = T)
+hazard_ratios_df = read.table("../Data/Figure_Reproduce/TCGA_unlabeled_LGG_GBM_STAD_hazard_ratios_for_survival_analysis.txt", sep = "\t", header = T)
 
 # Forest plot using ggplot2
 hazard_ratios_df$cancer_type = factor(hazard_ratios_df$cancer_type, levels = c("combined cancer types","GBM","STAD","LGG"))

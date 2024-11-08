@@ -34,10 +34,10 @@ cancer_types = c("BRCA", "CESC", "ESCA", "GBM", "HNSC",
 model = "LR" 
 
 for (cancer in cancer_types){
-  probability_scores_file_true = read_csv(paste0("../plotting_data/TCGA_",cancer,"_LR_method_mean_ecDNA_predictions_nested_5_fold_200_repeat_on_true_ex_MLP.csv"))
+  probability_scores_file_true = read_csv(paste0("../Data/Figure_Reproduce/TCGA_",cancer,"_LR_method_mean_ecDNA_predictions_nested_5_fold_200_repeat_on_true_ex_MLP.csv"))
   colnames(probability_scores_file_true) <- c("sample", "patient_id","ecDNA_positive", "Prediction")
   
-  probability_scores_file_pred = read_csv(paste0("../plotting_data/TCGA_",cancer,"_LR_method_mean_ecDNA_predictions_nested_5_fold_200_repeat_on_predicted_ex_MLP_uni.csv"))
+  probability_scores_file_pred = read_csv(paste0("../Data/Figure_Reproduce/TCGA_",cancer,"_LR_method_mean_ecDNA_predictions_nested_5_fold_200_repeat_on_predicted_ex_MLP_uni.csv"))
   colnames(probability_scores_file_pred) <- c("sample", "patient_id","ecDNA_positive", "Prediction")
   
   #### Get all sample and AUC from mean probability of all folds
@@ -117,8 +117,8 @@ legend("bottomright", legend = cancer_order,
 ```{r}
 # ecDNA prediction radar charts for all TCGA cancer types (from true or predicted expression)
 
-ecDNA_pred_df_no_amplicon = read.table(paste0("../plotting_data/TCGA_all_cancer_all_model_MLP_expression_ecDNA_predictions_for_ecDNA_vs_no_amplicon_uni.txt"), header = T)
-ecDNA_pred_all_samples_df = read.table(paste0("../plotting_data/TCGA_all_cancer_all_model_MLP_expression_ecDNA_mean_predictions_for_all_samples_uni.txt"), header = T)
+ecDNA_pred_df_no_amplicon = read.table(paste0("../Data/Figure_Reproduce/TCGA_all_cancer_all_model_MLP_expression_ecDNA_predictions_for_ecDNA_vs_no_amplicon_uni.txt"), header = T)
+ecDNA_pred_all_samples_df = read.table(paste0("../Data/Figure_Reproduce/TCGA_all_cancer_all_model_MLP_expression_ecDNA_mean_predictions_for_all_samples_uni.txt"), header = T)
 
 ecDNA_pred_df_no_amplicon = ecDNA_pred_df_no_amplicon[which(ecDNA_pred_df_no_amplicon$model == "LR"),]
 ecDNA_pred_all_samples_df = ecDNA_pred_all_samples_df[which(ecDNA_pred_all_samples_df$model == "LR"),]
@@ -191,7 +191,7 @@ legend(x = "topright", legend = c("Predicted","True"),
 ```{r}
 # Plot ecDNA predictions for all structural categories
 
-input_fn = "../plotting_data/TCGA_all_cancer_all_model_all_expression_from_MLP_variant_categories_and_predictions_for_plotting_uni.txt"
+input_fn = "../Data/Figure_Reproduce/TCGA_all_cancer_all_model_all_expression_from_MLP_variant_categories_and_predictions_for_plotting_uni.txt"
 input_file = read.table(input_fn, header = T)
 
 model_df = input_file[which(input_file$model == "LR"),]
@@ -285,7 +285,7 @@ print(plot_ecDNA_score_ecDNA_status)
 
 ### Benchmarking ML models with true and predicted expression
 
-out_df_all_sample = read.table("../plotting_data//TCGA_all_cancer_all_model_AUC_MLP_expression_ecDNA_mean_predictions_for_all_samples_uni.txt", header = T)
+out_df_all_sample = read.table("../Data/Figure_Reproduce//TCGA_all_cancer_all_model_AUC_MLP_expression_ecDNA_mean_predictions_for_all_samples_uni.txt", header = T)
 
 out_df_all_sample$cancer = factor(out_df_all_sample$cancer, levels = c("LGG","GBM","STAD","BRCA","LUAD","HNSC","ESCA","CESC","LUSC"))
 
@@ -309,7 +309,7 @@ print(plot_all_samples_lollipop)
 
 ### Benchmarking ecPATH against Resnet expression and direct models
 
-model_performances_fn = "../plotting_data/Benchmarking_TCGA_ecDNA_predictions_by_model.txt"
+model_performances_fn = "../Data/Figure_Reproduce/Benchmarking_TCGA_ecDNA_predictions_by_model.txt"
 
 output_df = read.table(model_performances_fn, header = T)
 
@@ -359,8 +359,8 @@ print(lollipop_plot)
 ```{r}
 
 ## EGFR ROC curve on only positive samples or including predictions of model on ecDNA negative samples (All samples)
-ecDNA_pos_and_neg_pred_df = read.csv("../plotting_data/EGFR_pos_neg_ecDNA_neg_mean_predictions.csv", sep = "\t", header=T) #with predictions from ecDNA negative samples
-ecDNA_pos_pred_df = read.csv("../plotting_data/EGFR_predictions_on_all_cancer_types.csv")
+ecDNA_pos_and_neg_pred_df = read.csv("../Data/Figure_Reproduce/EGFR_pos_neg_ecDNA_neg_mean_predictions.csv", sep = "\t", header=T) #with predictions from ecDNA negative samples
+ecDNA_pos_pred_df = read.csv("../Data/Figure_Reproduce/EGFR_predictions_on_all_cancer_types.csv")
 set.seed(123)
 
 new_df = ecDNA_pos_and_neg_pred_df
@@ -396,7 +396,7 @@ legend("bottomright", legend = c(paste0("ecDNA pos samples (AUC = ", round(auc_p
 ```{r}
 ### Plot EGFR prediction scores for EGFR positive, negative, and samples, ecDNA negative, and ecDNA negative with EGFR high copy number
 
-EGFR_df1 = read.table("../plotting_data/EGFR_score_for_ecDNA_pos_neg_EGFR_CN_samples.txt", header = T, sep = "\t")
+EGFR_df1 = read.table("../Data/Figure_Reproduce/EGFR_score_for_ecDNA_pos_neg_EGFR_CN_samples.txt", header = T, sep = "\t")
 
 EGFR_plot1 = ggplot(EGFR_df1, aes(x = as.factor(EGFR_status), y = mean_prediction, fill = as.factor(EGFR_status))) + 
   geom_boxplot() + 
@@ -429,7 +429,7 @@ print(EGFR_plot1)
 
 ### Plot EGFR prediction scores for other categories (EGFR copy number low, medium and high)
 
-EGFR_levels_w_pred_df = read.table("../plotting_data/EGFR_predictions_for_EGFR_CN_categories.txt", header = T, sep = "\t")
+EGFR_levels_w_pred_df = read.table("../Data/Figure_Reproduce/EGFR_predictions_for_EGFR_CN_categories.txt", header = T, sep = "\t")
 
 colors <- c("#FFA500", "#CC5E80", "#B33AC0" ,"#9B29EF", "#7378EB","#5FA0E9" ,"#56B4E9")
 EGFR_plot2 = ggplot(EGFR_levels_w_pred_df, aes(x = as.factor(new_EGFR_status), y = mean_prediction, fill = as.factor(new_EGFR_status))) + 
