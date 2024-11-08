@@ -12,7 +12,10 @@ warnings.filterwarnings("ignore", category=DeprecationWarning)
 warnings.filterwarnings("ignore", category=UserWarning)
 warnings.filterwarnings("ignore", category=FutureWarning)
 
-print("ecPATH is a tool for predicting ecDNA from H&E-stained pathology slides.\n")
+print("###########################################################################.\n")
+print("# ecPATH is a tool for predicting ecDNA from H&E-stained pathology slides #\n")
+print("###########################################################################\n")
+
 print("Setting up the environment...\n")
 import numpy as np
 import openslide

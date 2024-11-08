@@ -8,7 +8,7 @@ MODE = "prediction"  # or "reviewer_test" for testing (skip preprocessing & use 
 basic_param = {
     "input_dir": os.path.join(BASE_DIR, "input"),
     "output_dir": os.path.join(BASE_DIR, "output"),
-    "cancer_type": "LGG",  # only support ['LGG', 'GBM', 'STAD']
+    "cancer_type": "GBM",  # only support ['LGG', 'GBM', 'STAD']
 }
 
 data_cloud_param = {
@@ -19,7 +19,7 @@ data_cloud_param = {
 preprocess_param = {
     "verbose": True,
     "slide_extention": ".svs",
-    "input_keyword": "test",  # ecPATH will automatically find the input files by matching this keyword, example, "test": test_1.svs, test_2.svs, ..., test_n.svs
+    "input_keyword": "TCGA",  # ecPATH will automatically find the input files by matching this keyword, example, "test": test_1.svs, test_2.svs, ..., test_n.svs
     "generate_mask": True,
     "mag_selected": 20,
     "mag_assumed": 40,
