@@ -2,7 +2,9 @@ import concurrent.futures
 import glob
 import multiprocessing
 import os
+import subprocess
 import warnings
+import zipfile
 
 # import gdown
 
@@ -34,9 +36,20 @@ LR_model_path = os.path.join(DATA_DIR, "Model", "LR")
 if not os.path.exists(MLP_model_path) or not os.path.exists(LR_model_path):
     warnings.warn("Model weights not found, start downloading now...")
     if data_cloud_param["zenodo_record_id"] != "":
-        print(
-            f"Please manually download the entire Data folder from {data_cloud_param['gcloud_drive']} and put it in Prediction/ folder"
-        )
+        print("Downloading from Zenodo...")
+        subprocess.run(["zenodo_get", data_cloud_param["zenodo_record_id"]], check=True)
+        print("Done.\n")
+
+        # Unzip the downloaded file
+        zip_path = os.path.join(BASE_DIR, "Data.zip")
+        if os.path.exists(zip_path):
+            with zipfile.ZipFile(zip_path, "r") as zip_ref:
+                zip_ref.extractall(".")
+            os.remove(zip_path)
+        else:
+            warnings.warn(f"{zip_path} not found after download")
+    else:
+        print("Downloading from Google Drive... (NOT implemented yet)")
         # gdown.download(data_cloud_param["gcloud_drive"], DATA_DIR, fuzzy=True)
 
 

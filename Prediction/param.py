@@ -13,7 +13,7 @@ basic_param = {
 
 data_cloud_param = {
     "gcloud_drive": "",
-    "zenodo_record_id": "",
+    "zenodo_record_id": "14057816",  # 11/08/2024
 }
 
 preprocess_param = {
