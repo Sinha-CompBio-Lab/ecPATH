@@ -35,5 +35,5 @@ dependencies:
       - timm==1.0.11
       - tqdm==4.66.5
       - zenodo-client==0.3.5
-      - spams==2.6.5
+      - spams==2.6.5.4
       - zenodo_get==1.6.1
