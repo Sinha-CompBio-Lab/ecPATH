@@ -1,7 +1,7 @@
 import os
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_DIR = os.path.join(BASE_DIR, "Data")
+DATA_DIR = os.path.join(BASE_DIR, "..", "Data")
 
 MODE = "prediction"  # or "reviewer_test" for testing (skip preprocessing & use test features)
 

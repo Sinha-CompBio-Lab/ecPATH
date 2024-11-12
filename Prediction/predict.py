@@ -37,7 +37,7 @@ MLP_model_path = os.path.join(DATA_DIR, "Model", "MLP")
 LR_model_path = os.path.join(DATA_DIR, "Model", "LR")
 
 if not os.path.exists(MLP_model_path) or not os.path.exists(LR_model_path):
-    warnings.warn("Model weights not found, start downloading now...")
+    print("Model weights not found, start downloading now...")
     if data_cloud_param["zenodo_record_id"] != "":
         print("Downloading from Zenodo...")
         subprocess.run(["zenodo_get", data_cloud_param["zenodo_record_id"]], check=True)
@@ -144,10 +144,18 @@ ecDNA_predictions_df = pd.DataFrame(np.mean(ecDNA_predictions, axis=0))
 ecDNA_predictions_df.columns = ["ecDNA_score"]
 ecDNA_predictions_df.index = gene_expr_predictions.index
 ecDNA_predictions_df.index.name = "input_slide"
-ecDNA_predictions_df["ecDNA_prediction"] = (
-    ecDNA_predictions_df["ecDNA_score"]
-    > ecDNA_param["threshold"][basic_param["cancer_type"]]
-)
+
+if ecDNA_param.get("threshold", {}).get(basic_param.get("cancer_type")) is None:
+    print(
+        f"ecDNA prediction threshold not found for {basic_param['cancer_type']}, considering set the threshold in param.py"
+    )
+    print("ecDNA predictions are saved without binary prediction\n")
+else:
+    ecDNA_predictions_df["ecDNA_prediction"] = (
+        ecDNA_predictions_df["ecDNA_score"]
+        > ecDNA_param["threshold"][basic_param["cancer_type"]]
+    )
+
 ecDNA_predictions_df.to_csv(
     ecDNA_output_path,
     index=True,
