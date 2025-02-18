@@ -138,7 +138,7 @@ def predict(model, valid_set):
 
 
 ##================================================================================================
-def fit(model, optimizer, train_set, valid_set, max_epochs, patience, batch_size):
+def fit(model, optimizer, train_set, valid_set, max_epochs, patience, batch_size,result_dir):
 
     train_loss_list = []
     train_coef_list = []
@@ -184,7 +184,10 @@ def fit(model, optimizer, train_set, valid_set, max_epochs, patience, batch_size
         if epoch_since_best == patience:
             print("Early stopping at epoch {}".format(e + 1))
             break
-
+    
+    ## save trained model
+    torch.save(model.state_dict(), f"{result_dir}model_trained.pth")
+    
     return (
         model,
         train_loss_list,
@@ -215,7 +218,7 @@ def analyze_result(
 ):
 
     ## save trained model
-    torch.save(model.state_dict(), f"{result_dir}model_trained.pth")
+    # torch.save(model.state_dict(), f"{result_dir}model_trained.pth")
 
     train_valid_loss = np.array(
         (train_loss, valid_loss, train_coef, valid_coef, train_slope, valid_slope)

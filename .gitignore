@@ -22,6 +22,9 @@
 /Prediction/assets/*
 !/Prediction/assets/.gitkeep
 
+# Ignore specific files
+/Model_Training/*cpy.py
+
 # Python specific ignores (optional)
 __pycache__/
 *.pyc
