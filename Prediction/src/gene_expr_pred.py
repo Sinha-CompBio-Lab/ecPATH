@@ -7,15 +7,15 @@ import torch
 from src.MLP import MLP_regression
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from param import MODE, basic_param
+# from param import Config.MODE, Config.basic_param
 
 
 class GeneExpressionPredictor:
     def __init__(
         self, input_files, model_path, model_name, cancer_type, slide_extention, device
     ):
-        if MODE == "reviewer_test":
-            model_name = "uni"  # use uni model for reviewer test
+        # if MODE == "reviewer_test":
+        #     model_name = "uni"  # use uni model for reviewer test
         self.input_files = input_files
         self.feature_list = []
         self.model_name = model_name
@@ -25,13 +25,18 @@ class GeneExpressionPredictor:
         self.genes_to_predict = None
         self.predictions = None
 
-    def load_features(self):
-        if MODE == "reviewer_test":  # uses uni features - 1024
+    def load_features(self, mode):
+        if not mode:  # uses uni features - 1024
             # use test features provided by the developer
-            test_feature_path = os.path.join(basic_param["input_dir"], "test_features")
-            for file in os.listdir(test_feature_path):
-                feature_path = os.path.join(test_feature_path, file)
-                self.feature_list.append(np.load(feature_path))
+            # test_feature_path = os.path.join(basic_param["input_dir"], "test_features")
+            # for file in os.listdir(test_feature_path):
+            #     feature_path = os.path.join(test_feature_path, file)
+            #     self.feature_list.append(np.load(feature_path))
+
+            # Load uni Features 
+            for file in self.input_files:
+                self.feature_list.append(np.load(file))
+    
         else:
             for file in self.input_files:
                 feature_path = os.path.join(

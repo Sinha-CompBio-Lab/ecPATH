@@ -17,7 +17,6 @@ import time
 
 import numpy as np
 import pandas as pd
-# from model_MLP import *
 from model import *
 from torch.utils.data import ConcatDataset, DataLoader
 from utils import *
@@ -308,7 +307,7 @@ def result(model_results, results_path, genes_to_predict, test_set):
 
     print(f"analyze_result -- completed -- time: {(time.time() - start_time):.2f}s")
     ##================================================================================================
-
+    print("Resultes saved at: ", results_path)
     print("--- completed ---")
 
 
@@ -320,11 +319,12 @@ parser.add_argument('--base_input_path', type=str, default="/shares/sinha/lliu/p
                     help="base input path where all data is kept")
 parser.add_argument('--output_path', type=str, default='/shares/sinha/sadeleye/ecPATH_Results')
 parser.add_argument('--analyze_results', default=True, action='store_true')
+args = parser.parse_args()
 
 BASE = ""
 
 if __name__ == '__main__':
-    args = parser.parse_args()
+
     BASE = args.base_input_path
     # BASE = os.path.join("/shares", "sinha", "lliu", "projects", "pre-cancer-image-omics")
 
@@ -349,18 +349,11 @@ if __name__ == '__main__':
         f"sample_split_{n_outers}_{n_inners}_fold_{cur_type}.pkl",
     )
 
-    # results_path = os.path.join(
-    #     BASE,
-    #     "predictResults",
-    #     cur_type,
-    #     f"{n_split}_folds_cur_{cur_split_selection}_resnet",
-    #     "",  # TODO: modify for UNI (_uni0d), ResNet50
-    # )
+
     results_path = os.path.join(args.output_path,
         "predictResults",
         cur_type,
         f"{n_split}_folds_cur_{cur_split_selection}_{args.feature_extract}",
-        "",  # TODO: modify for UNI (_uni0d), ResNet50 (_resnet)
     )
 
     if not os.path.exists(results_path):
@@ -369,7 +362,7 @@ if __name__ == '__main__':
     else:
         print("output path exists: ", results_path)
 
-    print("output path: ", results_path)
+  
 
     cur_results_len = len(os.listdir(results_path))
 
@@ -379,7 +372,6 @@ if __name__ == '__main__':
 
     model_results = train(all_target, train_set, valid_set)
 
-    # if args.anayze_result:
     if args.analyze_results:
         result(model_results, results_path, genes_to_predict, test_set)
     
