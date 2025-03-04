@@ -78,36 +78,29 @@ def rank_normalize(array):
     return normalized_ranks
 
 
-def data_prep(cancer_type,exp_model,corr_threshold,q_value_threshold,
-              output_path, genes_info_file,true_expression_df,predicted_expression_df,ecDNA_df,MLecDNA_df):
+def data_prep_Mlecdna(true_expression_df,predicted_expression_df,MLecDNA_df,cancer_type,exp_model, output_path,):
     # Setting 'ID' as index for easier reordering
     true_expression_df.set_index('sample_name', inplace=True)
     predicted_expression_df.set_index('slide_submitter_id', inplace=True)
 
     # Reindexing df2 to match the order of df1
     predicted_expression_df_reordered = predicted_expression_df.reindex(true_expression_df.index)
-    true_expression_df_reordered = true_expression_df.reindex(true_expression_df.index)
 
     # Resetting index if necessary
     predicted_expression_df_reordered.reset_index(inplace=True)
-    true_expression_df_reordered.reset_index(inplace=True)
-
     predicted_expression_df = predicted_expression_df_reordered
-    true_expression_df = true_expression_df_reordered
+    true_expression_df.reset_index(inplace=True)
 
-    project_id = f"TCGA-{cancer_type}"
-    ecDNA_cancer_df = ecDNA_df[ecDNA_df['cancer_type'] == project_id]
-
-    
     # Filter and aggregate gene ecdna prediction from MLecDna paper
     sample_ecDNA_status_df = MLecDNA_df.groupby('sample').agg({
             'gene_class': lambda x: '1' if 'circular' in set(x) else '0'
             }).reset_index()
     sample_ecDNA_status_df = sample_ecDNA_status_df.rename(columns={'gene_class': 'ecDNA_status'}) # rename to ecDna_status
     MLecDNA_samples = sample_ecDNA_status_df['sample'].tolist()
+
     # filter true_gene_expressions and predicted by samples predicted by MLecDna paper
     true_expression_df_filtered = true_expression_df[true_expression_df['sample_name'].str[:-1].isin(MLecDNA_samples)]
-    predicted_expression_df_filtered = predicted_expression_df[predicted_expression_df['sample_name'].str[:-1].isin(MLecDNA_samples)]
+    pred_expression_df_filtered = predicted_expression_df[predicted_expression_df['sample_name'].str[:-1].isin(MLecDNA_samples)]
 
     # merge MLecDna predicitons with true gene epxressions:
     '''True gene expressions samples have sample_name: TCGA-A1-A0SM-01A, 
@@ -119,28 +112,65 @@ def data_prep(cancer_type,exp_model,corr_threshold,q_value_threshold,
         sample_ecDNA_status_df['ecDNA_status']
     ))
     true_expression_df_filtered['sample_id'] = true_expression_df_filtered['sample_name'].str[:-1]  # Remove last character
+    pred_expression_df_filtered['sample_id'] = pred_expression_df_filtered['sample_name'].str[:-1]  # Remove last character
     true_expression_df_filtered['ecDNA_status'] = true_expression_df_filtered['sample_id'].map(sample_to_status)
-    # predicted_expression_df_filtered['sample_id'] = predicted_expression_df_filtered['sample_name'].str[:-1]  # Remove last character
-    # predicted_expression_df_filtered['ecDNA_status'] = predicted_expression_df_filtered['sample_id'].map(sample_to_status)
+    pred_expression_df_filtered['ecDNA_status'] = pred_expression_df_filtered['sample_id'].map(sample_to_status)
+
     all_columns = true_expression_df_filtered.columns.tolist()
     all_columns.remove('sample_name')
     all_columns.remove('sample_id')
     all_columns.remove('ecDNA_status')
     new_order = ['sample_name', 'sample_id', 'ecDNA_status'] + all_columns[:]
+
     # Change columns to samplename ecdna_status sample_id and genes
     merged_df_true_filtered = true_expression_df_filtered[new_order]
     merged_df_true_filtered = merged_df_true_filtered.reset_index(drop=True)
-    # predicted_expression_df_filtered = predicted_expression_df_filtered[new_order]
-    # merged_df_pred_filtered = predicted_expression_df_filtered[new_order]
+    
+    merged_df_pred_filtered = pred_expression_df_filtered[new_order]
+    merged_df_pred_filtered = merged_df_true_filtered.reset_index(drop=True)
+
+    merged_df_pred_filtered = merged_df_pred_filtered.rename(columns={'sample_id': 'patient_id'}) 
+    merged_df_true_filtered = merged_df_true_filtered.rename(columns={'sample_id': 'patient_id'}) 
+
+
+    # Save prediction files 
+    # merged_df_pred_filtered.to_csv(output_path+ f"/TCGA_{cancer_type}_new_ecDNA_samples_for_prediction_from_DeepPT_exp_{exp_model}.csv", index=False)
+
+    # Data preparation
+    X_true = merged_df_true_filtered.iloc[:, 3:].values  # all rows, all columns except the last one
+    y = merged_df_true_filtered.iloc[:, 2].values  # all rows, last column
+    patients = merged_df_true_filtered.iloc[:, 1].values
+    X_pred = merged_df_pred_filtered.iloc[:, 3:].values  # all rows, all columns except the last one
+
+    X_rank_normalized_pred = rank_normalize(X_pred)
+    X_rank_normalized_true = rank_normalize(X_true)
+
+    return ( X_rank_normalized_true, X_rank_normalized_pred, patients, y), merged_df_true_filtered,  merged_df_pred_filtered, all_columns
+
+def data_prep_DeepPT(cancer_type,corr_threshold,q_value_threshold, genes_info_file,true_expression_df,
+                     predicted_expression_df,ecDNA_df,output_path,exp_model):
+    
+    # Setting 'ID' as index for easier reordering
+    true_expression_df.set_index('sample_name', inplace=True)
+    predicted_expression_df.set_index('slide_submitter_id', inplace=True)
+
+    # Reindexing df2 to match the order of df1
+    predicted_expression_df_reordered = predicted_expression_df.reindex(true_expression_df.index)
+
+    # Resetting index if necessary
+    predicted_expression_df_reordered.reset_index(inplace=True)
+    predicted_expression_df = predicted_expression_df_reordered
+    true_expression_df.reset_index(inplace=True)
+
+
+    # ecDna status from DeepPt
+    project_id = f"TCGA-{cancer_type}"
+    ecDNA_cancer_df = ecDNA_df[ecDNA_df['cancer_type'] == project_id]
 
     # Get the genes that can be predicted by the DeepPT model (q < 0.05 and corr > 0.4)
-    # Read the CSV file
     gene_info = pd.read_csv(genes_info_file, delimiter="\t")
-    # print(gene_info)
-
     # Filter genes with p_adj < 0.05
     genes_of_interest_df = gene_info[gene_info['Pearson_padj'] < q_value_threshold]
-
     # Further filter genes with coef > 0.4
     genes_of_interest_df = genes_of_interest_df[genes_of_interest_df['Pearson_corr'] > corr_threshold]
     genes_of_interest = list(genes_of_interest_df['Gene_ENSID'])
@@ -150,69 +180,36 @@ def data_prep(cancer_type,exp_model,corr_threshold,q_value_threshold,
     select_expression_df_pred = predicted_expression_df[columns]
     select_expression_df_true = true_expression_df[columns]
 
-    select_expression_df_pred = predicted_expression_df_filtered[columns]
-
-    # print(select_expression_df_pred.head())
-    # print(select_expression_df_true.head())
-
-    # keep ecDNA status and sample names and merge with expression file
+     # keep ecDNA status and sample names and merge with expression file
     columns_to_keep = ['sample', 'patient_id', 'ecDNA_status']
-
     # Create a new DataFrame with only the selected columns
     ecDNA_df_selected = ecDNA_cancer_df[columns_to_keep]
 
-
     # Drop duplicate rows based on the selected columns
     ecDNA_df = ecDNA_df_selected.drop_duplicates()
-    sample_ecDNA_status_df = sample_ecDNA_status_df.drop_duplicates()
-
-    # Print the resulting DataFrame
-    # print(ecDNA_df)
 
 
     columns_in_merged = ['sample_name','patient_id','ecDNA_status'] + genes_of_interest
-    # merged_df_true = pd.merge(ecDNA_df, select_expression_df_true, right_on='sample_name', left_on="sample", how='inner')
+    merged_df_true = pd.merge(ecDNA_df, select_expression_df_true, right_on='sample_name', left_on="sample", how='inner')
     merged_df_pred = pd.merge(ecDNA_df, select_expression_df_pred, right_on='sample_name', left_on="sample", how='inner')
 
-
-
+    merged_df_true = merged_df_true[columns_in_merged]
     merged_df_pred = merged_df_pred[columns_in_merged]
-    # merged_df_true = merged_df_true[columns_in_merged]
 
-    # print(merged_df_pred_filtered.head())
-    # print(merged_df_true_filtered.head())
-    # print(merged_df_pred.head())
-    # print(merged_df_true.head())
-
-
-
-    output_ecDNA_sample_df = merged_df_pred[['sample_name','patient_id','ecDNA_status']]
-    ecDNA_status = pd.Series(merged_df_pred['ecDNA_status'])
-    # print(ecDNA_status.value_counts())
-    output_ecDNA_sample_df.to_csv(output_path+ f"/TCGA_{cancer_type}_new_ecDNA_samples_for_prediction_from_DeepPT_exp_{exp_model}.csv", index=False)
-    # merged_df_pred_filtered.to_csv(output_path+ f"/TCGA_{cancer_type}_new_ecDNA_samples_for_prediction_from_DeepPT_exp_{exp_model}.csv", index=False)
-
-
+    output_ecDNA_sample_df = merged_df_true[['sample_name','patient_id','ecDNA_status']]
+    # output_ecDNA_sample_df.to_csv(output_path+ f"/TCGA_{cancer_type}_new_ecDNA_samples_for_prediction_from_DeepPT_exp_{exp_model}.csv", index=False)
 
     # Data preparation
-    X_true = merged_df_true_filtered.iloc[:, 3:].values  # all rows, all columns except the last one
-    y = merged_df_true_filtered.iloc[:, 2].values  # all rows, last column
-    patients = merged_df_true_filtered.iloc[:, 1].values
-    X_pred = merged_df_pred.iloc[:, 3:].values  # all rows, all columns except the last one
-
-
-
+    X_true = merged_df_true.iloc[:, 3:].values 
+    X_pred = merged_df_pred.iloc[:, 3:].values  
+    y = merged_df_true.iloc[:, 2].values  # all rows, last column
+    patients = merged_df_true.iloc[:, 1].values
 
     X_rank_normalized_pred = rank_normalize(X_pred)
     X_rank_normalized_true = rank_normalize(X_true)
 
     
-    return ( X_rank_normalized_true, X_rank_normalized_pred, patients, y), merged_df_true_filtered,  merged_df_pred, all_columns
-    # return ( X_rank_normalized_true, X_rank_normalized_pred, patients, y), merged_df_true_filtered, merged_df_pred_filtered, all_columns
-    
-    # return ( X_rank_normalized_true, X_rank_normalized_pred, patients, y), merged_df_pred, genes_of_interest
-
-
+    return ( X_rank_normalized_true, X_rank_normalized_pred, patients, y), merged_df_true,  merged_df_pred, genes_of_interest
 
 
 def train(model_results, repeats, k_fold_splits, genes_of_interest,  expression_type, ml_method, number_top_features,
@@ -339,7 +336,6 @@ def train(model_results, repeats, k_fold_splits, genes_of_interest,  expression_
     gene_feature_list = [item for sublist in gene_features_for_models for item in sublist]
     auc_feature_list = [item for sublist in gene_feature_AUCs_for_models for item in sublist]
     select_feature_and_AUC_names_df = pd.DataFrame({'Gene_name': gene_feature_list, 'AUC': auc_feature_list})
-    print(select_feature_and_AUC_names_df)
     select_feature_and_AUC_names_df.to_csv(output_gene_feature_csv_file_fn)
 
     return auc_scores,model_pred_dfs
@@ -357,13 +353,11 @@ def predict_and_results(auc_scores, model_pred_dfs, prediction_result_fn, merged
     # Result
     #print(average_predictions)
 
-    # prediction_result_df = pd.concat([merged_df_pred[['sample_name','patient_id','ecDNA_status']], average_predictions[['Prediction']]], axis=1)
-    prediction_result_df = pd.concat([merged_df_pred[['sample_name','sample_id','ecDNA_status']], average_predictions[['Prediction']]], axis=1)
-    
+    prediction_result_df = pd.concat([merged_df_pred[['sample_name','patient_id','ecDNA_status']], average_predictions[['Prediction']]], axis=1)
     
         
     prediction_result_df.to_csv(prediction_result_fn, index=False)
-    #print(prediction_result_df)
+
 
     print("job completed")
 
@@ -371,13 +365,14 @@ def predict_and_results(auc_scores, model_pred_dfs, prediction_result_fn, merged
 
 
 parser = argparse.ArgumentParser(description='train gene expression')
-parser.add_argument('--cancer_type', type=list,default='BRCA',choices=['BRCA','LUAD','STAD','HNSC','LGG','CESC','LUSC','ESCA','GBM']) 
+parser.add_argument('--cancer_type', type=str,default='BRCA',choices=['BRCA','LUAD','STAD','HNSC','LGG','CESC','LUSC','ESCA','GBM']) 
 parser.add_argument('--ml_methods', type=str, default='LR', choices=['LR', 'GB', 'SVM', 'RF'], 
                     help= "logistic regression, gradient boosting, SVM, Random Forest")
 parser.add_argument('--expression_type', type=str, default='true',choices=['true','predicted']) 
 parser.add_argument('--k_fold_splits', type=int, default=5)
 parser.add_argument('--epochs', type=int, default=1)
 parser.add_argument('--feature_extract', type=str, default= 'uni', choices=['uni','resnet'])
+parser.add_argument('--data_type', type=str, default= 'MLecdna', choices=['DeepPt','MLecdna'])
 
 parser.add_argument('--base_input_path', type=str, default="/shares/sinha/mchoudhury/projects/pre-cancer-image-omics/TCGA_all_cancer_DeepPT",
                     help="base input path where all data is kept")
@@ -398,6 +393,7 @@ if __name__ == '__main__':
     k_fold_splits = args.k_fold_splits  # usually 5
     repeats = args.epochs 
     exp_model = args.feature_extract
+    data_type = args.data_type
 
     corr_threshold = args.corr_threshold  # DeepPT correlation threshold
     q_value_threshold = args.q_value_threshold  # DeepPT p adj threshold
@@ -407,61 +403,65 @@ if __name__ == '__main__':
 
     # Set random seed for numpy
     np.random.seed(42)
-
-
-    # output predictions file:
-    if expression_type == "true":
-        prediction_result_fn = args.output_path + f"/TCGA_{cancer_type}_{ml_method}_method_mean_ecDNA_predictions_nested_{k_fold_splits}_fold_{repeats}_repeat_on_{expression_type}_ex_DeepPT.csv"
-    if expression_type == "predicted":
-        prediction_result_fn = args.output_path + f"/TCGA_{cancer_type}_{ml_method}_method_mean_ecDNA_predictions_nested_{k_fold_splits}_fold_{repeats}_repeat_on_{expression_type}_ex_DeepPT_{exp_model}.csv"
+    
+    cancer_types = ['BRCA','LUAD','STAD','HNSC','LGG','CESC','LUSC','ESCA','GBM']
+    for cancer_type in cancer_types:
+        # output predictions file:
+        if expression_type == "true":
+            prediction_result_fn = args.output_path + f"/TCGA_{cancer_type}_{ml_method}_method_mean_ecDNA_{data_type}_predictions_nested_{k_fold_splits}_fold_{repeats}_repeat_on_{expression_type}_ex_DeepPT_.csv"
+        if expression_type == "predicted":
+            prediction_result_fn = args.output_path + f"/TCGA_{cancer_type}_{ml_method}_method_mean_ecDNA_{data_type}_predictions_nested_{k_fold_splits}_fold_{repeats}_repeat_on_{expression_type}_ex_DeepPT_{exp_model}.csv"
+            
+        ## output models and genes for models files:
+        output_model_file_fn = args.output_path + f"/TCGA_ecDNA_models/TCGA_{cancer_type}_{k_fold_splits}_split_{repeats}_repeat_{expression_type}_expression_{ml_method}_models_{exp_model}.pkl"
+        output_gene_feature_file_fn = args.output_path + f"/TCGA_ecDNA_models/TCGA_{cancer_type}_{k_fold_splits}_split_{repeats}_repeat_{expression_type}_expression_{ml_method}_models_gene_features_{exp_model}.pkl"
+        output_gene_feature_csv_file_fn = args.output_path + f"/TCGA_ecDNA_models/TCGA_{cancer_type}_{k_fold_splits}_split_{repeats}_repeat_{expression_type}_expression_{ml_method}_models_gene_features_{exp_model}.csv"
+        output_auc_score_per_fold_file_fn = args.output_path + f"/TCGA_ecDNA_models/TCGA_{cancer_type}_{k_fold_splits}_split_{repeats}_repeat_{expression_type}_expression_{ml_method}_auc_scores_{exp_model}.csv"
         
-    ## output models and genes for models files:
-    output_model_file_fn = args.output_path + f"/TCGA_ecDNA_models/TCGA_{cancer_type}_{k_fold_splits}_split_{repeats}_repeat_{expression_type}_expression_{ml_method}_models_{exp_model}.pkl"
-    output_gene_feature_file_fn = args.output_path + f"/TCGA_ecDNA_models/TCGA_{cancer_type}_{k_fold_splits}_split_{repeats}_repeat_{expression_type}_expression_{ml_method}_models_gene_features_{exp_model}.pkl"
-    output_gene_feature_csv_file_fn = args.output_path + f"/TCGA_ecDNA_models/TCGA_{cancer_type}_{k_fold_splits}_split_{repeats}_repeat_{expression_type}_expression_{ml_method}_models_gene_features_{exp_model}.csv"
-    output_auc_score_per_fold_file_fn = args.output_path + f"/TCGA_ecDNA_models/TCGA_{cancer_type}_{k_fold_splits}_split_{repeats}_repeat_{expression_type}_expression_{ml_method}_auc_scores_{exp_model}.csv"
+        if not os.path.exists(args.output_path+"/TCGA_ecDNA_models/"):
+            print("output path created: ", args.output_path+"/TCGA_ecDNA_models/")
+            os.makedirs(args.output_path+"/TCGA_ecDNA_models/")
     
-    if not os.path.exists(args.output_path+"/TCGA_ecDNA_models/"):
-        print("output path created: ", args.output_path+"/TCGA_ecDNA_models/")
-        os.makedirs(args.output_path+"/TCGA_ecDNA_models/")
-   
-    # Read expression file and ecDNA file
-    # columns: Sample_name Gene expression1 ....
-    true_expression_df = pd.read_csv(args.base_input_path 
-                + f"/data/TCGA_{cancer_type}.DeepPT_normalized_reformatted_true_expression_per_sample_{exp_model}.txt",
-                delimiter='\t')
-    predicted_expression_df = pd.read_csv(args.base_input_path 
-                + f"/data/TCGA_{cancer_type}.DeepPT_reformatted_avg_predicted_expression_per_sample_{exp_model}.txt",
-                delimiter='\t')  # reorder the samples here
-    
-    # All tumor TCGA info. 
-    # columns: sample, patient_id, cancer_type.., ecDNA_status
-    ecDNA_df = pd.read_csv(args.base_input_path + '/../TCGA_eCDNA/data/TCGA_tumor_samples_all_cancer_type_ecDNA_and_other_variant_status.csv')
-    # print(ecDNA_df)
+        # Read expression file and ecDNA file
+        # columns: Sample_name Gene expression1 ....
+        true_expression_df = pd.read_csv(args.base_input_path 
+                    + f"/data/TCGA_{cancer_type}.DeepPT_normalized_reformatted_true_expression_per_sample_{exp_model}.txt",
+                    delimiter='\t')
+        predicted_expression_df = pd.read_csv(args.base_input_path 
+                    + f"/data/TCGA_{cancer_type}.DeepPT_reformatted_avg_predicted_expression_per_sample_{exp_model}.txt",
+                    delimiter='\t')  # reorder the samples here
+        
+        # All tumor TCGA info. from DeepPt
+        # columns: sample, patient_id, cancer_type.., ecDNA_status
+        ecDNA_df = pd.read_csv(args.base_input_path + '/../TCGA_eCDNA/data/TCGA_tumor_samples_all_cancer_type_ecDNA_and_other_variant_status.csv')
 
-    MLecDNA_df_r = pyreadr.read_r(f'/shares/sinha/sadeleye/ecPATH/Data/Training_Data/tcga_snp_array_gcap_result2/TCGA_SNP_{cancer_type}_prediction_result.rds')
-    MLecDNA_df = MLecDNA_df_r[None] 
+        # All tumor TCGA info from MLecdna
+        MLecDNA_df_r = pyreadr.read_r(f'/shares/sinha/sadeleye/ecPATH/Data/Training_Data/tcga_snp_array_gcap_result2/TCGA_SNP_{cancer_type}_prediction_result.rds')
+        MLecDNA_df = MLecDNA_df_r[None] 
 
-    # Gene info file
-    genes_info_file = args.base_input_path + f"/results/TCGA_{cancer_type}.DeepPT_pred_coef_pvalue_per_gene_{exp_model}.txt"
+        # Gene info file
+        genes_info_file = args.base_input_path + f"/results/TCGA_{cancer_type}.DeepPT_pred_coef_pvalue_per_gene_{exp_model}.txt"
 
-    print("Loading data...")
+        print("Loading data...")
 
-    model_results, merged_df_true, merged_df_pred, genes_of_interest = data_prep(cancer_type, exp_model, corr_threshold, q_value_threshold,args.output_path,
-                                            genes_info_file,true_expression_df,predicted_expression_df,ecDNA_df,MLecDNA_df)
-    
-    
-    
-    
-    
-    print("Data Loaded \n Now Starting to Train Model... ")
-    auc_scores, model_pred_dfs = train( model_results, repeats, k_fold_splits, genes_of_interest,
-                                        expression_type, ml_method, number_top_features,
-                                        output_model_file_fn, 
-                                        output_gene_feature_file_fn,
-                                        output_gene_feature_csv_file_fn,
-                                        output_auc_score_per_fold_file_fn
-                                    )
-    print("Training Finished. Saving Results..")
-    predict_and_results(auc_scores, model_pred_dfs, prediction_result_fn, merged_df_true)
-    print(f"Results saved at {args.output_path}")
+        # model_results, merged_df_true, merged_df_pred, genes_of_interest = data_prep(cancer_type, exp_model, corr_threshold, q_value_threshold,args.output_path,
+                                                # genes_info_file,true_expression_df,predicted_expression_df,ecDNA_df,MLecDNA_df)
+        
+        if data_type == "DeepPt":
+            model_results, merged_df_true, merged_df_pred, genes_of_interest =  data_prep_DeepPT(cancer_type,corr_threshold,q_value_threshold, genes_info_file,true_expression_df,
+                        predicted_expression_df,ecDNA_df,args.output_path,exp_model)
+        else:
+            model_results, merged_df_true, merged_df_pred, genes_of_interest =  data_prep_Mlecdna(true_expression_df,predicted_expression_df,MLecDNA_df,cancer_type,exp_model,args.output_path)
+        
+        
+        print("Data Loaded \n Now Starting to Train Model... ")
+        auc_scores, model_pred_dfs = train( model_results, repeats, k_fold_splits, genes_of_interest,
+                                            expression_type, ml_method, number_top_features,
+                                            output_model_file_fn, 
+                                            output_gene_feature_file_fn,
+                                            output_gene_feature_csv_file_fn,
+                                            output_auc_score_per_fold_file_fn
+                                        )
+        print("Training Finished. Saving Results..")
+        predict_and_results(auc_scores, model_pred_dfs, prediction_result_fn, merged_df_true)
+        print(f"Results saved at {args.output_path}")
