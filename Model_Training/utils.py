@@ -10,11 +10,136 @@ import statsmodels.stats.multitest as smt
 import torch
 import torch.nn.functional as F
 from scipy.stats import norm, pearsonr
-from sklearn.metrics import f1_score, roc_auc_score
 from torch.utils.data import Dataset, Subset
-
+from sklearn.metrics import f1_score, recall_score, precision_score, accuracy_score, roc_auc_score
+from sklearn.model_selection import KFold, GroupKFold
 
 ##===================================================================================================
+class Feature_Dataset(Dataset):
+    def __init__(self,filepaths, targets):
+        """
+        Args:
+        file_path (string): Path to .npy file containing slide feature data.
+        """
+        self.features = [np.load(temp_feature).astype(np.float32) for temp_feature in filepaths]
+        self.targets = np.array(targets, dtype=np.float32)
+        self.length = len(self.features)
+
+    def __len__(self):
+        return self.length
+
+    def __getitem__(self,idx):
+        sample = torch.Tensor(self.features[idx]).float()
+        target = torch.tensor([self.targets[idx]], dtype=torch.float)
+        return sample, target
+     
+
+def get_detailed_metrics(model, dataset, batch_size=None):
+    """
+    Get detailed evaluation metrics for final model assessment
+    
+    Parameters:
+    -----------
+    model : nn.Module
+        The neural network model
+    dataset : Dataset
+        Dataset to evaluate on
+    batch_size : int, optional
+        Batch size (not used in this implementation)
+        
+    Returns:
+    --------
+    dict
+        Detailed performance metrics
+    """
+    device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+    model.eval()
+    
+    all_labels = []
+    all_preds = []
+    all_probs = []
+    loss_fn = torch.nn.BCELoss()
+    total_loss = 0.0
+    
+    with torch.no_grad():
+        for i in range(len(dataset)):
+            x, y = dataset[i]
+            pred = model(x.to(device))
+            
+            # Calculate loss
+            loss = loss_fn(pred, y.float().to(device))
+            total_loss += loss.item()
+            
+            # Convert to binary predictions
+            binary_pred = (pred.cpu() >= 0.5).float()
+            
+            # Store results
+            all_labels.append(y.cpu().numpy())
+            all_preds.append(binary_pred.numpy())
+            all_probs.append(pred.cpu().numpy())
+    
+    # Convert lists to numpy arrays and flatten
+    all_labels = np.array(all_labels).flatten()
+    all_preds = np.array(all_preds).flatten()
+    all_probs = np.array(all_probs).flatten()
+    
+    # Calculate average loss
+    avg_loss = total_loss / len(dataset)
+    
+    # Calculate metrics
+    metrics = {
+        'loss': avg_loss,
+        'f1': f1_score(all_labels, all_preds, zero_division=0),
+        'recall': recall_score(all_labels, all_preds, zero_division=0),
+        'precision': precision_score(all_labels, all_preds, zero_division=0),
+        'accuracy': accuracy_score(all_labels, all_preds)
+    }
+    
+    # Add AUC if we have both classes
+    if len(np.unique(all_labels)) > 1:
+        metrics['auc'] = roc_auc_score(all_labels, all_probs)
+    else:
+        metrics['auc'] = 0.5
+    
+    return metrics
+
+
+def create_grouped_cv_splits(dataset_indices, group_ids, n_splits=5, random_state=42):
+    """
+    Create cross-validation splits where samples from the same individual stay together.
+    
+    Parameters:
+    -----------
+    dataset_indices : array-like
+        Indices of the dataset to split
+    group_ids : array-like
+        Group identifiers (e.g., patient IDs) for each sample in dataset_indices
+    n_splits : int
+        Number of folds
+    random_state : int
+        Random seed for reproducibility
+        
+    Returns:
+    --------
+    list of tuples
+        List of (train_indices, test_indices) for each fold
+    """
+    # Ensure group_ids is a numpy array
+    group_ids = np.array(group_ids)
+    
+    # Use GroupKFold to keep samples from the same group in the same fold
+    group_kfold = GroupKFold(n_splits=n_splits)
+    
+    # Get the splits
+    splits = []
+    for train_idx, test_idx in group_kfold.split(dataset_indices, groups=group_ids):
+        # Convert to actual indices from the dataset
+        train_indices = dataset_indices[train_idx]
+        test_indices = dataset_indices[test_idx]
+        splits.append((train_indices, test_indices))
+    
+    return splits
+
 #### Build dataset
 class slide_target_dataset(Dataset):
     ## input: features_list[n_slides](slide_name, features[n_tiles,n_features])

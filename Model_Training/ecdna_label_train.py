@@ -8,7 +8,6 @@ import argparse
 import scipy.stats
 import pyreadr
 import time
-import pyreadr
 import os
 from ecdna_label_model import *
 
@@ -267,10 +266,7 @@ def train(model_results, repeats, k_fold_splits, genes_of_interest,  expression_
                 y_train, y_test = y[train_idx], y[test_idx]
                 patient_IDs_training = patients[train_idx]
                 patient_IDs_test = patients[test_idx]
-                #print(X_train_true_ex)
-                #print(y_train)
-                #print(X_test_true_ex)
-                #print(y_test)
+      
         
                 # Assume custom feature selection is properly defined
                 selected_features_indices, AUC_for_select_features, select_feature_names, gene_AUCs = select_features_based_on_true_training_data(X_train_true_ex, y_train, include_low_AUC, number_top_features,genes_of_interest)
@@ -322,7 +318,7 @@ def train(model_results, repeats, k_fold_splits, genes_of_interest,  expression_
     joblib.dump(models, output_model_file_fn)
     select_feature_names_df = pd.DataFrame(gene_features_for_models)
     select_feature_names_df.to_pickle(output_gene_feature_file_fn)
-    #select_feature_names_df.to_csv(output_gene_feature_csv_file_fn)
+
 
     auc_scores_per_fold_df = pd.DataFrame(columns=['Fold', 'AUC_Score', 'AUC_STD'])
     for fold_idx, auc_curr in enumerate(auc_scores):
@@ -331,8 +327,7 @@ def train(model_results, repeats, k_fold_splits, genes_of_interest,  expression_
     auc_scores_per_fold_df.to_csv(output_auc_score_per_fold_file_fn)
 
 
-    #print(select_feature_names_df)
-    #select_feature_names_df.to_csv(output_gene_feature_csv_file_fn)
+
     gene_feature_list = [item for sublist in gene_features_for_models for item in sublist]
     auc_feature_list = [item for sublist in gene_feature_AUCs_for_models for item in sublist]
     select_feature_and_AUC_names_df = pd.DataFrame({'Gene_name': gene_feature_list, 'AUC': auc_feature_list})
@@ -350,12 +345,8 @@ def predict_and_results(auc_scores, model_pred_dfs, prediction_result_fn, merged
     # Calculate the mean of 'Prediction' for each 'sample_idx'
     average_predictions = pd.DataFrame(combined_pred_df.groupby('sample_idx')['Prediction'].mean())
 
-    # Result
-    #print(average_predictions)
-
     prediction_result_df = pd.concat([merged_df_pred[['sample_name','patient_id','ecDNA_status']], average_predictions[['Prediction']]], axis=1)
     
-        
     prediction_result_df.to_csv(prediction_result_fn, index=False)
 
 
@@ -364,7 +355,7 @@ def predict_and_results(auc_scores, model_pred_dfs, prediction_result_fn, merged
 
 
 
-parser = argparse.ArgumentParser(description='train gene expression')
+parser = argparse.ArgumentParser(description='train gene status')
 parser.add_argument('--cancer_type', type=str,default='BRCA',choices=['BRCA','LUAD','STAD','HNSC','LGG','CESC','LUSC','ESCA','GBM']) 
 parser.add_argument('--ml_methods', type=str, default='LR', choices=['LR', 'GB', 'SVM', 'RF'], 
                     help= "logistic regression, gradient boosting, SVM, Random Forest")
@@ -404,7 +395,8 @@ if __name__ == '__main__':
     # Set random seed for numpy
     np.random.seed(42)
     
-    cancer_types = ['BRCA','LUAD','STAD','HNSC','LGG','CESC','LUSC','ESCA','GBM']
+    # cancer_types = ['BRCA','LUAD','STAD','HNSC','LGG','CESC','LUSC','ESCA','GBM']
+    cancer_types = [cancer_type]
     for cancer_type in cancer_types:
         # output predictions file:
         if expression_type == "true":
@@ -413,10 +405,10 @@ if __name__ == '__main__':
             prediction_result_fn = args.output_path + f"/TCGA_{cancer_type}_{ml_method}_method_mean_ecDNA_{data_type}_predictions_nested_{k_fold_splits}_fold_{repeats}_repeat_on_{expression_type}_ex_DeepPT_{exp_model}.csv"
             
         ## output models and genes for models files:
-        output_model_file_fn = args.output_path + f"/TCGA_ecDNA_models/TCGA_{cancer_type}_{k_fold_splits}_split_{repeats}_repeat_{expression_type}_expression_{ml_method}_models_{exp_model}.pkl"
-        output_gene_feature_file_fn = args.output_path + f"/TCGA_ecDNA_models/TCGA_{cancer_type}_{k_fold_splits}_split_{repeats}_repeat_{expression_type}_expression_{ml_method}_models_gene_features_{exp_model}.pkl"
-        output_gene_feature_csv_file_fn = args.output_path + f"/TCGA_ecDNA_models/TCGA_{cancer_type}_{k_fold_splits}_split_{repeats}_repeat_{expression_type}_expression_{ml_method}_models_gene_features_{exp_model}.csv"
-        output_auc_score_per_fold_file_fn = args.output_path + f"/TCGA_ecDNA_models/TCGA_{cancer_type}_{k_fold_splits}_split_{repeats}_repeat_{expression_type}_expression_{ml_method}_auc_scores_{exp_model}.csv"
+        output_model_file_fn = args.output_path + f"/TCGA_ecDNA_models/TCGA_{cancer_type}_{k_fold_splits}_split_{repeats}_repeat_{expression_type}_expression_{ml_method}_models_{exp_model}_{data_type}.pkl"
+        output_gene_feature_file_fn = args.output_path + f"/TCGA_ecDNA_models/TCGA_{cancer_type}_{k_fold_splits}_split_{repeats}_repeat_{expression_type}_expression_{ml_method}_models_gene_features_{exp_model}_{data_type}.pkl"
+        output_gene_feature_csv_file_fn = args.output_path + f"/TCGA_ecDNA_models/TCGA_{cancer_type}_{k_fold_splits}_split_{repeats}_repeat_{expression_type}_expression_{ml_method}_models_gene_features_{exp_model}_{data_type}.csv"
+        output_auc_score_per_fold_file_fn = args.output_path + f"/TCGA_ecDNA_models/TCGA_{cancer_type}_{k_fold_splits}_split_{repeats}_repeat_{expression_type}_expression_{ml_method}_auc_scores_{exp_model}_{data_type}.csv"
         
         if not os.path.exists(args.output_path+"/TCGA_ecDNA_models/"):
             print("output path created: ", args.output_path+"/TCGA_ecDNA_models/")
@@ -442,11 +434,7 @@ if __name__ == '__main__':
         # Gene info file
         genes_info_file = args.base_input_path + f"/results/TCGA_{cancer_type}.DeepPT_pred_coef_pvalue_per_gene_{exp_model}.txt"
 
-        print("Loading data...")
-
-        # model_results, merged_df_true, merged_df_pred, genes_of_interest = data_prep(cancer_type, exp_model, corr_threshold, q_value_threshold,args.output_path,
-                                                # genes_info_file,true_expression_df,predicted_expression_df,ecDNA_df,MLecDNA_df)
-        
+        print("Loading data...")        
         if data_type == "DeepPt":
             model_results, merged_df_true, merged_df_pred, genes_of_interest =  data_prep_DeepPT(cancer_type,corr_threshold,q_value_threshold, genes_info_file,true_expression_df,
                         predicted_expression_df,ecDNA_df,args.output_path,exp_model)
