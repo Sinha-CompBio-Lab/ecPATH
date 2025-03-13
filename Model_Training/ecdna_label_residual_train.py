@@ -94,235 +94,19 @@ def dataPrep_DeepPt(ecDNA_df , cur_results_len, results_path, feature_extractor,
     pass    
 
 
-
-
-def nested_cv_with_regularization_grouped_1(dataset, input_dim, group_ids, n_outer_folds=5, n_inner_folds=5, 
-                                         batch_size=32, epochs=30, hidden_dim=256, 
-                                         learning_rate=0.001, early_stopping_patience=5):
-    """
-    Perform nested cross-validation with respect to groups where samples from the same
-    individual must stay in the same split.
-    
-    Parameters:
-    -----------
-    dataset : Dataset
-        The full dataset
-    input_dim : int
-        Input dimension for the model
-    group_ids : array-like
-        Group identifiers (e.g., patient IDs) for each sample
-    n_outer_folds : int
-        Number of folds for outer CV
-    n_inner_folds : int
-        Number of folds for inner CV
-    batch_size : int
-        Batch size for training
-    epochs : int
-        Maximum number of epochs
-    hidden_dim : int
-        Hidden dimension for the model
-    learning_rate : float
-        Learning rate for optimizer
-    early_stopping_patience : int
-        Number of epochs to wait before early stopping
-        
-    Returns:
-    --------
-    dict
-        Results of nested CV, including best regularization type and hyperparameters
-    """
-    device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
-    print(f"Using device: {device}")
-    
-    # Define regularization types and parameters to try
-    regularization_params = {
-        'L1 only': {'l1_values': [0.0001, 0.0005, 0.001, 0.005, 0.01], 'l2_values': [0.0]},
-        'L2 only': {'l1_values': [0.0], 'l2_values': [0.0001, 0.0005, 0.001, 0.005, 0.01]},
-        'Elastic Net': {'l1_values': [0.0001, 0.001, 0.01], 'l2_values': [0.0001, 0.001, 0.01]}
-    }
-    
-    # Setup indices
-    dataset_indices = np.arange(len(dataset))
-    
-    # Create OUTER CV splits respecting group constraints
-    outer_splits = create_grouped_cv_splits(dataset_indices, group_ids, n_splits=n_outer_folds)
-    
-    # Results tracking
-    all_results = {reg_type: {'scores': [], 'best_params': []} for reg_type in regularization_params.keys()}
-    
-    # Outer CV loop
-    for outer_fold, (train_val_idx, test_idx) in enumerate(outer_splits):
-        print(f"\nOuter Fold {outer_fold+1}/{n_outer_folds}")
-        
-        # Get group IDs for the train_val samples
-        train_val_group_ids = [group_ids[i] for i in train_val_idx]
-        
-        # Create INNER CV splits respecting group constraints
-        inner_splits = create_grouped_cv_splits(train_val_idx, train_val_group_ids, n_splits=n_inner_folds)
-        
-        # For each regularization type
-        for reg_type, params in regularization_params.items():
-            print(f"\nEvaluating {reg_type} regularization")
-            
-            best_params = None
-            best_score = -np.inf
-            
-            # Grid search over regularization parameters
-            for l1_lambda in params['l1_values']:
-                for l2_lambda in params['l2_values']:
-                    if l1_lambda == 0.0 and l2_lambda == 0.0:
-                        continue  # Skip no regularization case
-                    
-                    print(f"  Testing L1={l1_lambda}, L2={l2_lambda}")
-                    
-                    # Inner CV for this parameter combination
-                    inner_scores = []
-                    
-                    for inner_fold, (inner_train_idx, inner_val_idx) in enumerate(inner_splits):
-                        # Create model
-                        # model = EcDNAClassifier(input_dim=input_dim, hidden_dim=hidden_dim).to(device)
-                        model =  EcDNATileClassifier(input_dim=input_dim, hidden_dim=hidden_dim).to(device)
-                        optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
-                        
-                        # Train model with current regularization parameters
-                        best_val_score = -np.inf
-                        patience_counter = 0
-                        
-                        for epoch in range(epochs):
-                            train_loss, _, _ = training_epoch(
-                                model, optimizer, 
-                                Subset(dataset, inner_train_idx), 
-                                batch_size, l1_lambda, l2_lambda
-                            )
-                            
-                            # Evaluate on validation set
-                            val_score = evaluate_model(model, Subset(dataset, inner_val_idx), batch_size)
-                            
-                            # Early stopping check
-                            if val_score > best_val_score:
-                                best_val_score = val_score
-                                patience_counter = 0
-                            else:
-                                patience_counter += 1
-                                if patience_counter >= early_stopping_patience:
-                                    break
-                        
-                        inner_scores.append(best_val_score)
-                    
-                    # Average score across inner folds
-                    mean_score = np.mean(inner_scores)
-                    print(f"    Mean inner CV score: {mean_score:.4f}")
-                    
-                    # Update best parameters if better
-                    if mean_score > best_score:
-                        best_score = mean_score
-                        best_params = {'l1_lambda': l1_lambda, 'l2_lambda': l2_lambda}
-            
-            print(f"  Best parameters for {reg_type}: {best_params}, score: {best_score:.4f}")
-            
-            # Extract a small, group-aware validation set for early stopping
-            # We need to identify a subset of groups to hold out
-            unique_groups = np.unique(train_val_group_ids)
-            np.random.shuffle(unique_groups)
-            es_groups = unique_groups[:max(1, len(unique_groups) // 10)]  # 10% of groups
-            
-            # Find indices corresponding to early stopping groups
-            early_stop_mask = np.isin(train_val_group_ids, es_groups)
-            early_stop_indices = train_val_idx[early_stop_mask]
-            final_train_indices = train_val_idx[~early_stop_mask]
-            
-            # Train a model with best parameters on all train_val data (except early stopping subset)
-            model = EcDNATileClassifier(input_dim=input_dim, hidden_dim=hidden_dim).to(device)
-            optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
-            
-            best_model = None
-            best_es_score = -np.inf
-            patience_counter = 0
-            
-            for epoch in range(epochs):
-                train_loss, _, _ = training_epoch(
-                    model, optimizer, 
-                    Subset(dataset, final_train_indices), 
-                    batch_size, 
-                    best_params['l1_lambda'], 
-                    best_params['l2_lambda']
-                )
-              
-                # Evaluate for early stopping
-                es_score = evaluate_model(model, Subset(dataset, early_stop_indices), batch_size)
-                
-                if es_score > best_es_score:
-                    best_es_score = es_score
-                    best_model = deepcopy(model.state_dict())
-                    patience_counter = 0
-                else:
-                    patience_counter += 1
-                    if patience_counter >= early_stopping_patience:
-                        break
-            
-            # Load best model
-            model.load_state_dict(best_model)
-            
-            # Evaluate on test set
-            test_score = evaluate_model(model, Subset(dataset, test_idx), batch_size)
-            print(f"  Test score for {reg_type}: {test_score:.4f}")
-            
-            # Store results
-            all_results[reg_type]['scores'].append(test_score)
-            all_results[reg_type]['best_params'].append(best_params)
-    
-    # Calculate mean and std for each regularization type
-    summary = {}
-    for reg_type in regularization_params.keys():
-        scores = all_results[reg_type]['scores']
-        summary[reg_type] = {
-            'mean_score': np.mean(scores),
-            'std_score': np.std(scores),
-            'best_params': all_results[reg_type]['best_params']
-        }
-    
-    # Determine best regularization type
-    best_reg_type = max(summary.keys(), key=lambda k: summary[k]['mean_score'])
-    
-    # Find most common best parameters
-    all_best_params = all_results[best_reg_type]['best_params']
-    param_counts = {}
-    for params in all_best_params:
-        param_key = f"L1={params['l1_lambda']}, L2={params['l2_lambda']}"
-        if param_key not in param_counts:
-            param_counts[param_key] = 0
-        param_counts[param_key] += 1
-    
-    most_common_params = max(param_counts.keys(), key=lambda k: param_counts[k])
-    
-    # Return results
-    return {
-        'summary': summary,
-        'best_regularization': best_reg_type,
-        'mean_score': summary[best_reg_type]['mean_score'],
-        'std_score': summary[best_reg_type]['std_score'],
-        'most_common_params': most_common_params,
-        'detailed_results': all_results
-    }
-
-
-
 def nested_cv_with_regularization_grouped(dataset, input_dim, group_ids, n_outer_folds=5, n_inner_folds=5, 
                                          batch_size=32, epochs=30, hidden_dim=256, 
                                          learning_rate=0.001, early_stopping_patience=5,
                                          primary_metric='auc'):
     """
-    Perform nested cross-validation with respect to groups where samples from the same
-    individual must stay in the same split.
-    
     Parameters:
     -----------
     dataset : Dataset
-        The full dataset
+        Full Image feature dataset
     input_dim : int
-        Input dimension for the model
-    group_ids : array-like
-        Group identifiers (e.g., patient IDs) for each sample
+        Input dimension for the model - preset for UNI now (testing)
+    group_ids : list
+        Unique group ids (e.g., patient IDs) for each sample
     n_outer_folds : int
         Number of folds for outer CV
     n_inner_folds : int
@@ -345,8 +129,6 @@ def nested_cv_with_regularization_grouped(dataset, input_dim, group_ids, n_outer
     dict
         Results of nested CV, including best regularization type and hyperparameters
     """
-    # from utils import create_grouped_cv_splits
-    # from ecdna_label_residualmodel import training_epoch
     
     device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
     print(f"Using device: {device}")
@@ -358,7 +140,7 @@ def nested_cv_with_regularization_grouped(dataset, input_dim, group_ids, n_outer
         'Elastic Net': {'l1_values': [0.0001, 0.001, 0.01], 'l2_values': [0.0001, 0.001, 0.01]}
     }
     
-    # Setup indices
+
     dataset_indices = np.arange(len(dataset))
     
     # Create OUTER CV splits respecting group constraints
@@ -374,7 +156,7 @@ def nested_cv_with_regularization_grouped(dataset, input_dim, group_ids, n_outer
         # Get group IDs for the train_val samples
         train_val_group_ids = [group_ids[i] for i in train_val_idx]
         
-        # Create INNER CV splits respecting group constraints
+        # Create INNER CV splits with groups constraints
         inner_splits = create_grouped_cv_splits(train_val_idx, train_val_group_ids, n_splits=n_inner_folds)
         
         # For each regularization type
@@ -437,7 +219,7 @@ def nested_cv_with_regularization_grouped(dataset, input_dim, group_ids, n_outer
             
             print(f"  Best parameters for {reg_type}: {best_params}, score: {best_score:.4f}")
             
-            # Extract a small, group-aware validation set for early stopping
+            # Extract a small, group-conscious validation set for early stopping
             # We need to identify a subset of groups to hold out
             unique_groups = np.unique(train_val_group_ids)
             np.random.shuffle(unique_groups)
@@ -482,7 +264,7 @@ def nested_cv_with_regularization_grouped(dataset, input_dim, group_ids, n_outer
             model.load_state_dict(best_model)
             
             # Evaluate on test set (get primary metric for comparison)
-            test_score = evaluate_model(model, Subset(dataset, test_idx), batch_size)
+            test_score, _ = evaluate_model(model, Subset(dataset, test_idx), batch_size)
             print(f"  Test score for {reg_type}: {test_score:.4f}")
             
             # Get detailed metrics for final reporting
@@ -696,7 +478,8 @@ parser.add_argument('--output_path', type=str, default='/shares/sinha/sadeleye/e
 args = parser.parse_args()
 
 if __name__ == '__main__':
-    print("Sarting Training.")
+    # Use this to ensure print statements are immediately flushed
+    print("Sarting Training.", flush=True)
     # 5 fold cross validation _ set up index
     n_split = args.k_fold_splits
     cancer_type = args.cancer_type 
@@ -724,7 +507,7 @@ if __name__ == '__main__':
     if not os.path.exists(sample_split_path):
         os.makedirs(sample_split_path)
 
-    print("Loading Data ....")
+    print("Loading Data ....", flush=True)
     if args.data_type == 'DeepPt':
         ecDNA_df = pd.read_csv(args.base_input_path + '/TCGA_eCDNA/data/TCGA_tumor_samples_all_cancer_type_ecDNA_and_other_variant_status.csv')
         merged_ecDNA_df = dataPrep_DeepPt(ecDNA_df, cancer_type, results_path, args.feature_extract)
@@ -734,8 +517,8 @@ if __name__ == '__main__':
         ecDNA_df = ecDNA_df_r[None] 
         ecDNA_dataset, groupids = dataPrep_MLecdna(ecDNA_df, cancer_type, results_path,n_split,sample_split_path)
     
-
+    print("Training...", flush=True)
     results = nested_cv_with_regularization_grouped(ecDNA_dataset,1024,groupids)
-    print(results)
+    print(results, flush=True)
 
     

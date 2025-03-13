@@ -41,11 +41,8 @@ def get_detailed_metrics(model, dataset, batch_size=None):
     Parameters:
     -----------
     model : nn.Module
-        The neural network model
     dataset : Dataset
-        Dataset to evaluate on
-    batch_size : int, optional
-        Batch size (not used in this implementation)
+        input feature dataset to evaluate on
         
     Returns:
     --------
@@ -65,6 +62,7 @@ def get_detailed_metrics(model, dataset, batch_size=None):
         for i in range(len(dataset)):
             x, y = dataset[i]
             pred = model(x.to(device))
+            y = y.view(1,1) # change y shave to be 1 x 1 vector
             
             # Calculate loss
             loss = loss_fn(pred, y.float().to(device))
@@ -110,9 +108,9 @@ def create_grouped_cv_splits(dataset_indices, group_ids, n_splits=5, random_stat
     
     Parameters:
     -----------
-    dataset_indices : array-like
+    dataset_indices : list
         Indices of the dataset to split
-    group_ids : array-like
+    group_ids : list
         Group identifiers (e.g., patient IDs) for each sample in dataset_indices
     n_splits : int
         Number of folds
