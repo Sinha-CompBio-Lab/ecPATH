@@ -328,10 +328,8 @@ def evaluate_model(model, dataset,batch_size=None):
     Parameters:
     -----------
     model : nn.Module
-        The neural network model
     dataset : Dataset
-        Dataset to evaluate on
-
+        image feature dataset to evaluate on
         
     Returns:
     --------
@@ -393,12 +391,8 @@ def evaluate_model_f1(model, dataset, batch_size=None):
     Parameters:
     -----------
     model : nn.Module
-        The neural network model
     dataset : Dataset
-        Dataset to evaluate on
-    batch_size : int, optional
-        Batch size (not used in this implementation)
-        
+        Image featuere dataset to evaluate on 
     Returns:
     --------
     dict
