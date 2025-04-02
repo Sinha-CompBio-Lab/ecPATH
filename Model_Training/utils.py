@@ -8,20 +8,52 @@ import numpy as np
 import pandas as pd
 import statsmodels.stats.multitest as smt
 import torch
+import h5py
 import torch.nn.functional as F
 from scipy.stats import norm, pearsonr
 from torch.utils.data import Dataset, Subset
 from sklearn.metrics import f1_score, recall_score, precision_score, accuracy_score, roc_auc_score
-from sklearn.model_selection import KFold, GroupKFold
+from sklearn.model_selection import KFold, GroupKFold, StratifiedGroupKFold, GroupShuffleSplit, train_test_split
+from collections import defaultdict
 
 ##===================================================================================================
-class Feature_Dataset(Dataset):
+class Feature_Dataset_GenePrdt(Dataset):
     def __init__(self,filepaths, targets):
         """
         Args:
         file_path (string): Path to .npy file containing slide feature data.
         """
         self.features = [np.load(temp_feature).astype(np.float32) for temp_feature in filepaths]
+        self.targets = [
+            (np.array(genes, dtype=np.float32), np.array(status, dtype=np.float32))
+            for genes, status in targets
+        ]
+        # self.targets = np.array(targets, dtype=np.float32)
+        self.length = len(self.features)
+
+    def __len__(self):
+        return self.length
+
+    def __getitem__(self,idx):
+        sample = torch.Tensor(self.features[idx]).float()
+        target_gene = torch.Tensor(self.targets[idx][0]).float()
+        target_status = torch.tensor([self.targets[idx]][1], dtype=torch.float)
+        return sample, (target_gene, target_status)
+
+class Feature_Dataset(Dataset):
+    def __init__(self,filepaths, targets, ext):
+        """
+        Args:
+        file_path (string): Path to .npy file containing slide feature data.
+        """
+        self.features = []
+        if ext == '.h5':
+            for temp_feature in filepaths:
+                with h5py.File(temp_feature, "r") as file:
+                    feature = file['embedding'][:]
+                    self.features.append(feature.astype(np.float32))
+        else:
+            self.features = [np.load(temp_feature).astype(np.float32) for temp_feature in filepaths]
         self.targets = np.array(targets, dtype=np.float32)
         self.length = len(self.features)
 
@@ -102,6 +134,131 @@ def get_detailed_metrics(model, dataset, batch_size=None):
     return metrics
 
 
+def create_stratified_grouped_cv_splits(dataset_indices, y, group_ids, n_splits=5, random_state=42):
+    """
+    Create cross-validation splits where:
+    1. Samples from the same group stay together
+    2. Class distribution is preserved in each fold
+    
+    Parameters:
+    -----------
+    dataset_indices : array-like
+        Indices of the dataset to split
+    y : array-like
+        Target labels (used for stratification)
+    group_ids : array-like
+        Group identifiers (e.g., patient IDs) for each sample
+    n_splits : int
+        Number of folds
+    random_state : int
+        Random seed for reproducibility
+        
+    Returns:
+    --------
+    list of tuples
+        List of (train_indices, test_indices) for each fold
+    """
+    # Ensure arrays are numpy arrays
+    dataset_indices = np.array(dataset_indices)
+    y = np.array(y)
+    group_ids = np.array(group_ids)
+    
+    # Use sklearn's StratifiedGroupKFold
+    cv = StratifiedGroupKFold(n_splits=n_splits, shuffle=True, random_state=random_state)
+    
+    # Get the splits
+    splits = []
+    for train_idx, test_idx in cv.split(dataset_indices, y, groups=group_ids):
+        # Convert to actual indices from the dataset
+        train_indices = dataset_indices[train_idx]
+        test_indices = dataset_indices[test_idx]
+        splits.append((train_indices, test_indices))
+    
+    return splits
+
+
+def create_train_val_test_split(dataset_indices, y, group_ids, test_size=0.2, val_size=0.1, random_state=42):
+    """
+    Create train/validation/test splits where:
+    1. Samples from the same group stay together
+    2. Class distribution is preserved in each split
+    
+    Parameters:
+    -----------
+    dataset_indices : array-like
+        Indices of the dataset to split
+    y : array-like
+        Target labels (used for stratification)
+    group_ids : array-like
+        Group identifiers (e.g., patient IDs) for each sample
+    test_size : float
+        Proportion of the dataset to include in the test split (default 0.2)
+    val_size : float
+        Proportion of the training set to include in the validation split (default 0.1)
+    random_state : int
+        Random seed for reproducibility
+        
+    Returns:
+    --------
+    tuple
+        (train_indices, val_indices, test_indices)
+    """
+    # Ensure arrays are numpy arrays
+    dataset_indices = np.array(dataset_indices)
+    y = np.array(y)
+    group_ids = np.array(group_ids)
+    
+    # Step 1: First split the data into train+val (80%) and test (20%) sets
+    # We'll use GroupShuffleSplit to maintain group integrity while splitting
+    gss = GroupShuffleSplit(n_splits=1, test_size=test_size, random_state=random_state)
+    
+    # Get the indices for the train+val and test sets
+    train_val_idx, test_idx = next(gss.split(dataset_indices, y, groups=group_ids))
+    
+    # Get the actual indices from the dataset
+    train_val_indices = dataset_indices[train_val_idx]
+    test_indices = dataset_indices[test_idx]
+    
+    # Get corresponding labels and group IDs for the train+val set
+    train_val_y = y[train_val_idx]
+    train_val_groups = group_ids[train_val_idx]
+    
+    # Step 2: Split the train+val set into train and validation
+    # Calculate the validation size relative to the train+val set
+    # If val_size is 0.1 of the whole dataset and we have 80% in train+val, 
+    # then val_size should be 0.1/0.8 = 0.125 of the train+val set
+    effective_val_size = val_size / (1 - test_size)
+    
+    # Use another GroupShuffleSplit to maintain group integrity
+    gss_val = GroupShuffleSplit(n_splits=1, test_size=effective_val_size, random_state=random_state)
+    
+    # Get the indices for the train and validation sets
+    train_idx, val_idx = next(gss_val.split(train_val_indices, train_val_y, groups=train_val_groups))
+    
+    # Get the actual indices from the dataset
+    train_indices = train_val_indices[train_idx]
+    val_indices = train_val_indices[val_idx]
+    
+    # Verify the class distributions in each split
+    print(f"Total samples: {len(dataset_indices)}")
+    print(f"Train samples: {len(train_indices)} ({len(train_indices)/len(dataset_indices):.2%})")
+    print(f"Validation samples: {len(val_indices)} ({len(val_indices)/len(dataset_indices):.2%})")
+    print(f"Test samples: {len(test_indices)} ({len(test_indices)/len(dataset_indices):.2%})")
+    
+    for label in np.unique(y):
+        total_count = np.sum(y == label)
+        train_count = np.sum(y[np.isin(dataset_indices, train_indices)] == label)
+        val_count = np.sum(y[np.isin(dataset_indices, val_indices)] == label)
+        test_count = np.sum(y[np.isin(dataset_indices, test_indices)] == label)
+        
+        print(f"Label {label}:")
+        print(f"  Train: {train_count}/{total_count} ({train_count/total_count:.2%})")
+        print(f"  Val: {val_count}/{total_count} ({val_count/total_count:.2%})")
+        print(f"  Test: {test_count}/{total_count} ({test_count/total_count:.2%})")
+    
+    return train_indices, val_indices, test_indices
+
+
 def create_grouped_cv_splits(dataset_indices, group_ids, n_splits=5, random_state=42):
     """
     Create cross-validation splits where samples from the same individual stay together.
@@ -130,7 +287,7 @@ def create_grouped_cv_splits(dataset_indices, group_ids, n_splits=5, random_stat
     
     # Get the splits
     splits = []
-    for train_idx, test_idx in group_kfold.split(dataset_indices, groups=group_ids):
+    for train_idx, test_idx in group_kfold.split(dataset_indices, groups=group_ids,random_state=random_state):
         # Convert to actual indices from the dataset
         train_indices = dataset_indices[train_idx]
         test_indices = dataset_indices[test_idx]
