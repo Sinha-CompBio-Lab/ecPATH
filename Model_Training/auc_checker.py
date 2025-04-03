@@ -7,14 +7,22 @@ import torch
 from sklearn.metrics import roc_auc_score
 from torch.utils.data import Dataset
 import os
+import h5py
 
 class Feature_Dataset(Dataset):
-    def __init__(self,filepaths, targets):
+    def __init__(self,filepaths, targets,ext):
         """
         Args:
         file_path (string): Path to .npy file containing slide feature data.
         """
-        self.features = [np.load(temp_feature).astype(np.float32) for temp_feature in filepaths]
+        self.features = []
+        if ext == '.h5':
+            for temp_feature in filepaths:
+                with h5py.File(temp_feature, "r") as file:
+                    feature = file['embedding'][:]
+                    self.features.append(feature.astype(np.float32))
+        else:
+            self.features = [np.load(temp_feature).astype(np.float32) for temp_feature in filepaths]
         self.targets = np.array(targets, dtype=np.float32)
         self.length = len(self.features)
 
@@ -68,19 +76,23 @@ def dataPrep_DeepPT(cancer_type,ecDNA_df):
     targets = []
     group_ids = []
     for idx, row in slides_meta_guide_df_type.iterrows():
-        feature_extract_dict = {"uni":"-uni.npy", "resnet":".npy"}
+        feature_extract_dict = {"uni":"-uni.npy", "resnet":".npy", "titan":".h5"}
         feature_extinson = feature_extract_dict[args.feature_extract]
-        temp_feature_path = os.path.join(
-                args.feature_input_dir,
-                "rawData",
-                "slides",
-                args.cancer_type,
-                row["id"],
-                "_features",
-                row["filename"].replace(
-                    ".svs", feature_extinson 
-                ), 
-            )
+        if feature_extinson == ".h5":
+            temp_feature_path = os.path.join(args.feature_input_dir,
+                                             row["filename"].split(".")[0] + feature_extinson,)
+        else:
+            temp_feature_path = os.path.join(
+                    args.feature_input_dir,
+                    "rawData",
+                    "slides",
+                    args.cancer_type,
+                    row["id"],
+                    "_features",
+                    row["filename"].replace(
+                        ".svs", feature_extinson 
+                    ), 
+                )
         if not os.path.exists(temp_feature_path):
             continue
         file_paths.append(temp_feature_path)
@@ -88,7 +100,7 @@ def dataPrep_DeepPT(cancer_type,ecDNA_df):
         targets.append(row["ecDNA_status"])
     print(f" Working with this many samples: {len(file_paths)}")
     print(f"{(sum(targets)/len(targets))*100:.2f}% of samples are Postive")
-    return Feature_Dataset(file_paths,targets), group_ids
+    return Feature_Dataset(file_paths,targets,feature_extinson), group_ids
 
 
 
@@ -101,12 +113,13 @@ def features_auc_scores(dataset):
     # Process each sample
     for features, label in dataset:
         # Handle different possible data formats
-        if isinstance(features, torch.Tensor):
-            # Average across the tiles dimension (dim 0)
-            sample_mean = features.mean(dim=0).cpu().numpy()
-        else:
-            # If numpy array or list
-            sample_mean = np.mean(features, axis=0)
+        # if isinstance(features, torch.Tensor):
+        #     # Average across the tiles dimension (dim 0)
+        #     sample_mean = features.mean(dim=0).cpu().numpy()
+        # else:
+        #     # If numpy array or list
+        #     sample_mean = np.mean(features, axis=0)
+        mean_features.append(features)
         
         # Convert label to appropriate format
         if isinstance(label, torch.Tensor):
@@ -115,7 +128,7 @@ def features_auc_scores(dataset):
             label_value = label
             
         # Append to our collections
-        mean_features.append(sample_mean)
+        # mean_features.append(sample_mean)
         all_labels.append(label_value)
     
     # Stack all mean feature vectors
@@ -149,12 +162,13 @@ parser.add_argument('--ml_methods', type=str, default='LR', choices=['LR', 'GB',
 parser.add_argument('--k_fold_splits', type=int, default=5)
 parser.add_argument('--curr_split', type=int, default=24)
 parser.add_argument('--epochs', type=int, default=1)
-parser.add_argument('--feature_extract', type=str, default= 'uni', choices=['uni','resnet'])
+parser.add_argument('--feature_extract', type=str, default= 'titan', choices=['uni','resnet','titan'])
 parser.add_argument('--data_type', type=str, default= 'DeepPt', choices=['DeepPt','MLecdna'])
 
 parser.add_argument('--base_input_path', type=str, default="/shares/sinha/sadeleye/ecPATH/Data/Training_Data",
                     help="base input path where data files are kept")
-parser.add_argument('--feature_input_dir', type=str, default="/shares/sinha/lliu/projects/pre-cancer-image-omics",
+
+parser.add_argument('--feature_input_dir', type=str, default="/shares/sinha/sadeleye/TITAN_Fets/TCGA_Titan_Fet", choices=['/shares/sinha/sadeleye/TITAN_Fets/TCGA_Titan_Fet','/shares/sinha/lliu/projects/pre-cancer-image-omics'],
                     help="base input path where image feaures are kept")
 
 parser.add_argument('--output_path', type=str, default='/shares/sinha/sadeleye/ecPATH_Results')
@@ -167,22 +181,23 @@ if __name__ == '__main__':
     n_split = args.k_fold_splits
     cancer_type = args.cancer_type 
 
+    cancer_types = ['BRCA','LUAD','STAD','HNSC','LGG','CESC','LUSC','ESCA','GBM']
+    for cancer_type in cancer_types:
+        # cur_split_selection = args.curr_split
+        print("Loading Data ....", flush=True)
+        if args.data_type == 'DeepPt':
+            ecDNA_df = pd.read_csv(args.base_input_path + '/TCGA_tumor_samples_all_cancer_type_ecDNA_and_other_variant_status.csv')
+            ecDNA_dataset, groupids = dataPrep_DeepPT(cancer_type,ecDNA_df)
 
-    # cur_split_selection = args.curr_split
-    print("Loading Data ....", flush=True)
-    if args.data_type == 'DeepPt':
-        ecDNA_df = pd.read_csv(args.base_input_path + '/TCGA_tumor_samples_all_cancer_type_ecDNA_and_other_variant_status.csv')
-        ecDNA_dataset, groupids = dataPrep_DeepPT(cancer_type,ecDNA_df)
+        auc_scores = features_auc_scores(ecDNA_dataset)
+        top_indices = np.argsort(auc_scores)[::-1][:10]
 
-    auc_scores = features_auc_scores(ecDNA_dataset)
-    top_indices = np.argsort(auc_scores)[::-1][:10]
-
-    with open(f"{cancer_type}_top_features_auc.txt", "w") as f:
-        f.write("Top 10 features by AUC:\n")
-        for idx in top_indices:
-            f.write(f"Feature {idx}: AUC = {auc_scores[idx]:.4f}\n")
-            print(f"Feature {idx}: AUC = {auc_scores[idx]:.4f}")
-        # Write the overall mean AUC
-        f.write(f"{np.mean(auc_scores)}\n")
-        print(np.mean(auc_scores))
-    
+        with open(f"{cancer_type}_top_Titan_features_auc.txt", "w") as f:
+            f.write("Top 10 features by AUC:\n")
+            for idx in top_indices:
+                f.write(f"Feature {idx}: AUC = {auc_scores[idx]:.4f}\n")
+                print(f"Feature {idx}: AUC = {auc_scores[idx]:.4f}")
+            # Write the overall mean AUC
+            f.write(f"{np.mean(auc_scores)}\n")
+            print(np.mean(auc_scores))
+        

@@ -243,7 +243,7 @@ def nested_cv_with_regularization_grouped(dataset, input_dim, group_ids, n_outer
                     # model = EcDNATileClassifier(input_dim=input_dim, hidden_dim=hidden_dim).to(device)
                     model = EcDNATileClassifier_AucSelect(input_dim=input_dim, hidden_dim=hidden_dim).to(device)
                     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
-                    # model.set_feature_mask( device,Subset(dataset, train_val_idx))
+                    model.set_feature_mask( device,Subset(dataset, train_val_idx))
                     
                     best_model = None
                     best_es_score = -np.inf
@@ -577,7 +577,8 @@ if __name__ == '__main__':
         ecDNA_dataset, groupids = dataPrep_MLecdna(ecDNA_df, cancer_type)
     
     print("Training...", flush=True)
-    results = nested_cv_with_regularization_grouped(ecDNA_dataset,1024,groupids, epochs=32,n_inner_folds=n_split,n_outer_folds=n_split)
+    input_dim = 768 if args.feature_extract == "titan" else 1024
+    results = nested_cv_with_regularization_grouped(ecDNA_dataset,input_dim,groupids, epochs=32,n_inner_folds=n_split,n_outer_folds=n_split)
     # print(results, flush=True)
 
     

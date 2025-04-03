@@ -86,6 +86,7 @@ class EcDNATileClassifier_AucSelect(nn.Module):
         
         
         # Final prediction layer
+        #residual block
         # self.fc = nn.Linear(hidden_dim, 1)
         # self.fc =  nn.Sequential(
         #     nn.Linear(hidden_dim, hidden_dim),
@@ -126,19 +127,20 @@ class EcDNATileClassifier_AucSelect(nn.Module):
             x = x.to(device)
             y = y.view(1,1).float().to(device)  # change y to be 1 x 1 vector
 
-            with torch.no_grad():
+            # with torch.no_grad():
                 # Get features before feature selection (for AUC calculation)
                 # Forward pass through feature extraction blocks
                 # features = self.res1(x)
                 # features = self.res2(features)
                 # features = self.res3(features)
                 # aggregated_features = torch.mean(features, dim=0, keepdim=True)
-                aggregated_features = torch.mean(x, dim=0, keepdim=True)
+                # aggregated_features = torch.mean(x, dim=0, keepdim=True)
                 
                 # Store for AUC calculation
-                batch_features.append(aggregated_features.detach())
-                # batch_features.append(x.detach())
-                batch_labels.append(y.detach())
+            # batch_features.append(aggregated_features.detach())
+            # Titan
+            batch_features.append(x.detach())
+            batch_labels.append(y.detach())
                 
         batch_features_tensor = torch.cat(batch_features, dim=0)
         batch_labels_tensor = torch.cat(batch_labels, dim=0)
@@ -180,7 +182,7 @@ class EcDNATileClassifier_AucSelect(nn.Module):
         
         # Select top-k features
         # _, top_indices = torch.topk(self.feature_scores, k=min(self.feature_selection_topk, len(auc_scores)))
-        threshold = 0.6
+        threshold = 0.65
         top_indices = torch.where(self.feature_scores >= threshold)[0]
 
         print(f"Features with AUC score >= {threshold}:")
@@ -198,8 +200,8 @@ class EcDNATileClassifier_AucSelect(nn.Module):
         new_mask[top_indices] = 1.0
         
         # Update the feature mask (gradual update to stabilize training)
-        alpha = 0.9  # Exponential moving average factor
-        self.feature_mask = alpha * self.feature_mask + (1 - alpha) * new_mask
+        # alpha = 0.9  # Exponential moving average factor
+        # self.feature_mask = alpha * self.feature_mask + (1 - alpha) * new_mask
         self.feature_mask = new_mask
         
     # Update the feature mask
@@ -221,13 +223,13 @@ class EcDNATileClassifier_AucSelect(nn.Module):
         # x = self.res3(x)  # Shape: [num_tiles, hidden_dim]
 
          # Average pooling across tiles
-        aggregated_features = torch.mean(x, dim=0,keepdim=True) # Shape: [1, hidden_dim]
+        # aggregated_features = torch.mean(x, dim=0,keepdim=True) # Shape: [1, hidden_dim]
 
          # Apply feature selection
-        selected_features = self.select_features_by_auc(aggregated_features)
+        # selected_features = self.select_features_by_auc(aggregated_features)
 
         #Titan
-        # selected_features = self.select_features_by_auc(x)
+        selected_features = self.select_features_by_auc(x)
         
         # Final prediction using the linear layer
         output = self.fc(selected_features)
@@ -272,11 +274,11 @@ def training_epoch_with_auc_select(model, optimizer, train_set, batch_size, l1_l
                 # features = model.res2(features)
                 # features = model.res3(features)
                 # aggregated_features = torch.mean(features, dim=0, keepdim=True)
-                # aggregated_features = torch.mean(x, dim=0, keepdim=True)
+                aggregated_features = torch.mean(x, dim=0, keepdim=True)
                 
                 # Store for AUC calculation
-                # batch_features.append(aggregated_features.detach())
-                batch_features.append(x.detach())
+                batch_features.append(aggregated_features.detach())
+                # batch_features.append(x.detach())
                 batch_labels.append(y.detach())
             
             # Complete the forward pass with feature selection
@@ -322,10 +324,10 @@ def training_epoch_with_auc_select(model, optimizer, train_set, batch_size, l1_l
         optimizer.step()
         
         # # Update feature mask after processing the batch
-        if batch_features:
-            batch_features_tensor = torch.cat(batch_features, dim=0)
-            batch_labels_tensor = torch.cat(batch_labels, dim=0)
-            model.update_feature_mask(batch_features_tensor, batch_labels_tensor)
+        # if batch_features:
+        #     batch_features_tensor = torch.cat(batch_features, dim=0)
+        #     batch_labels_tensor = torch.cat(batch_labels, dim=0)
+        #     model.update_feature_mask(batch_features_tensor, batch_labels_tensor)
     
     labels = np.array(labels)
     binary_preds = np.array(binary_preds)
