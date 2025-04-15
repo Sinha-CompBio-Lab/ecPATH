@@ -64,6 +64,34 @@ class Feature_Dataset(Dataset):
         sample = torch.Tensor(self.features[idx]).float()
         target = torch.tensor([self.targets[idx]], dtype=torch.float)
         return sample, target
+    
+
+class Feature_Dataset_combined(Dataset):
+    def __init__(self,filepaths, targets, ext):
+        """
+        Args:
+        file_path (string): Path to .npy file containing slide feature data.
+        """
+        self.features_uni = []
+        self.features_titan = []
+
+        for _,temp_feature in filepaths:
+            with h5py.File(temp_feature, "r") as file:
+                feature = file['embedding'][:]
+                self.features_titan.append(feature.astype(np.float32))
+
+        self.features_uni = [np.load(temp_feature).astype(np.float32) for temp_feature,_ in filepaths]
+        self.targets = np.array(targets, dtype=np.float32)
+        self.length = len(self.features_uni) 
+
+    def __len__(self):
+        return self.length
+
+    def __getitem__(self,idx):
+        sample_uni = torch.Tensor(self.features_uni[idx]).float()
+        sample_titan = torch.Tensor(self.features_titan[idx]).float()
+        target = torch.tensor([self.targets[idx]], dtype=torch.float)
+        return (sample_uni,sample_titan), target
      
 
 def get_detailed_metrics(model, dataset, batch_size=None):
