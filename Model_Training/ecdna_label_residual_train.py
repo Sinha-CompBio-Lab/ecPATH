@@ -20,8 +20,8 @@ from torch.utils.data import ConcatDataset, DataLoader
 from torch.utils.data import Dataset, Subset
 import argparse
 import pyreadr
-from ecdna_label_residual_model import training_epoch,training_epoch_with_auc_select, EcDNATileClassifier, EcDNATileClassifier_AucSelect
-from utils import Feature_Dataset, get_detailed_metrics, create_stratified_grouped_cv_splits, create_train_val_test_split
+from ecdna_label_residual_model import training_epoch,training_epoch_with_auc_select, EcDNATileClassifier, EcDNATileClassifier_AucSelect, RandomForestModel_Class
+from utils import Feature_Dataset,Feature_Dataset_combined, get_detailed_metrics, create_stratified_grouped_cv_splits, create_train_val_test_split
 from copy import deepcopy
 from sklearn.metrics import f1_score, recall_score, precision_score, accuracy_score, roc_auc_score
 from sklearn.model_selection import train_test_split
@@ -133,29 +133,32 @@ def dataPrep_DeepPT(cancer_type,ecDNA_df):
     for idx, row in slides_meta_guide_df_type.iterrows():
         feature_extract_dict = {"uni":"-uni.npy", "resnet":".npy", "titan":".h5"}
         feature_extinson = feature_extract_dict[args.feature_extract]
-        if feature_extinson == ".h5":
-            temp_feature_path = os.path.join(args.feature_input_dir,
-                                             row["filename"].split(".")[0] + feature_extinson,)
-        else:
-            temp_feature_path = os.path.join(
-                    args.feature_input_dir,
-                    "rawData",
-                    "slides",
-                    args.cancer_type,
-                    row["id"],
-                    "_features",
-                    row["filename"].replace(
-                        ".svs", feature_extinson 
-                    ), 
-                )
-        if not os.path.exists(temp_feature_path):
+        feature_extinson_titan = ".h5"
+        # if feature_extinson == ".h5":
+        temp_feature_path_titan = os.path.join("/shares/sinha/sadeleye/TITAN_Fets/TCGA_Titan_Fet",
+                                            row["filename"].split(".")[0] + feature_extinson_titan,)
+        # else:
+        temp_feature_path_uni = os.path.join(
+                args.feature_input_dir,
+                "rawData",
+                "slides",
+                args.cancer_type,
+                row["id"],
+                "_features",
+                row["filename"].replace(
+                    ".svs", feature_extinson 
+                ), 
+            )
+
+        if not os.path.exists(temp_feature_path_uni) or not os.path.exists(temp_feature_path_titan):
             continue
-        file_paths.append(temp_feature_path)
+        file_paths.append((temp_feature_path_uni,temp_feature_path_titan))
         group_ids.append(unique_patient_slide_ids[row["case_submitter_id"]])
         targets.append(row["ecDNA_status"])
     print(f" Working with this many samples: {len(file_paths)}")
     print(f"{(sum(targets)/len(targets))*100:.2f}% of samples are Postive")
-    return Feature_Dataset(file_paths,targets,feature_extinson), group_ids
+    # return Feature_Dataset(file_paths,targets,feature_extinson), group_ids
+    return Feature_Dataset_combined(file_paths,targets,feature_extinson), group_ids
 
 
 
@@ -238,12 +241,13 @@ def nested_cv_with_regularization_grouped(dataset, input_dim, group_ids, n_outer
                     
                     print(f"  Testing L1={l1_lambda}, L2={l2_lambda}")
                 
+                    feature_select = {'threshold': 0.7} # {'threshold': 0.7}, {'topK':10} , {'percent': 0.1}
 
                     # Train a model with best parameters on all train_val data (except early stopping subset)
                     # model = EcDNATileClassifier(input_dim=input_dim, hidden_dim=hidden_dim).to(device)
-                    model = EcDNATileClassifier_AucSelect(input_dim=input_dim, hidden_dim=hidden_dim).to(device)
+                    model = EcDNATileClassifier_AucSelect(input_dim, hidden_dim,feature_select).to(device)
                     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
-                    model.set_feature_mask( device,Subset(dataset, train_val_idx))
+                    # model.set_feature_mask(device,Subset(dataset, train_val_idx))
                     
                     best_model = None
                     best_es_score = -np.inf
@@ -280,7 +284,7 @@ def nested_cv_with_regularization_grouped(dataset, input_dim, group_ids, n_outer
     for param in all_results:
         mean_score = np.mean(all_results[param]['scores']) 
         l1_lambda, l2_lambda = param
-        print(f"'l1_lambda': {l1_lambda}, 'l2_lambda': {l2_lambda}")
+        print(f"\n'l1_lambda': {l1_lambda}, 'l2_lambda': {l2_lambda}")
         print(f"Mean model CV score: {mean_score:.4f}\n")
         if mean_score > best_parm_score:
             best_param = param
@@ -419,7 +423,8 @@ def evaluate_model(model, dataset, batch_size=None):
     with torch.no_grad():
         for i in range(len(dataset)):
             x, y = dataset[i]
-            pred = model(x.to(device))
+            x_u, x_t = x
+            pred = model(x_u.to(device), x_t.to(device))
             y = y.view(1,1) # change y shave to be 1 x 1 vector
             
             # Calculate loss
@@ -523,6 +528,46 @@ def evaluate_model_f1(model, dataset, batch_size=None):
     }
 
 
+def nested_RFModel(dataset,group_ids,n_outer_folds,input_dim):
+    
+    dataset_indices = np.arange(len(dataset))
+    all_labels = [dataset[i][1] for i in range(len(dataset))]  # Adjust based on your dataset structure
+    outer_splits = create_stratified_grouped_cv_splits(dataset_indices, all_labels, group_ids, n_splits=n_outer_folds)
+    
+    # # Define the parameter grid
+    # param_grid = {
+    #     'n_estimators': [100, 200, 300, 500],
+    #     'max_depth': [None, 10, 20, 30],
+    #     'min_samples_split': [2, 5, 10],
+    #     'min_samples_leaf': [1, 2, 4],
+    #     'max_features': ['sqrt', 'log2', None]
+    # }
+    param_grid = {
+        'n_estimators': [100, 200, 300, 500],
+    }
+    all_results = {
+        (n_est): {'scores': []} for n_est in  param_grid['n_estimators']
+    }
+
+    for outer_fold, (train_val_idx, test_val_idx) in enumerate(outer_splits):
+        print(f"\nOuter Fold {outer_fold+1}/{n_outer_folds}")
+        for para_typ, param in param_grid.items():
+            for n_ext in param:
+                rf_model = RandomForestModel_Class(input_dim,n_ext,42)
+                rf_model.train_rf_model( Subset(dataset, train_val_idx), True)
+                auc_score = rf_model.evaluate_rf_model( Subset(dataset, test_val_idx), True)
+                all_results[(n_ext)]['scores'].append(auc_score)
+    
+    best_parm_score = -np.inf
+    best_param = None
+    for param in all_results:
+        mean_score = np.mean(all_results[param]['scores']) 
+        if mean_score > best_parm_score:
+            best_param = param
+            best_parm_score = mean_score
+    print(f"\n n_estimator': {best_param}")
+    print(f"Mean model CV score: {mean_score:.4f}\n")
+
 
 parser = argparse.ArgumentParser(description='train gene status')
 parser.add_argument('--cancer_type', type=str,default='BRCA',choices=['BRCA','LUAD','STAD','HNSC','LGG','CESC','LUSC','ESCA','GBM']) 
@@ -577,8 +622,8 @@ if __name__ == '__main__':
         ecDNA_dataset, groupids = dataPrep_MLecdna(ecDNA_df, cancer_type)
     
     print("Training...", flush=True)
-    input_dim = 768 if args.feature_extract == "titan" else 1024
+    # input_dim = 768 if args.feature_extract == "titan" else 1024 # Uni or Titan embedding Size
+    input_dim = 768 + 1024
     results = nested_cv_with_regularization_grouped(ecDNA_dataset,input_dim,groupids, epochs=32,n_inner_folds=n_split,n_outer_folds=n_split)
-    # print(results, flush=True)
-
-    
+    # results = nested_RFModel(ecDNA_dataset,groupids,n_split,input_dim)
+   
