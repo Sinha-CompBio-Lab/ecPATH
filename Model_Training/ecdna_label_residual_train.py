@@ -21,7 +21,7 @@ from torch.utils.data import Dataset, Subset
 import argparse
 import pyreadr
 from ecdna_label_residual_model import training_epoch,training_epoch_with_auc_select, EcDNATileClassifier, EcDNATileClassifier_AucSelect, RandomForestModel_Class
-from utils import Feature_Dataset,Feature_Dataset_combined, get_detailed_metrics, create_stratified_grouped_cv_splits, create_train_val_test_split
+from utils import Feature_Dataset, get_detailed_metrics, create_stratified_grouped_cv_splits, create_train_val_test_split
 from copy import deepcopy
 from sklearn.metrics import f1_score, recall_score, precision_score, accuracy_score, roc_auc_score
 from sklearn.model_selection import train_test_split
@@ -134,31 +134,30 @@ def dataPrep_DeepPT(cancer_type,ecDNA_df):
         feature_extract_dict = {"uni":"-uni.npy", "resnet":".npy", "titan":".h5"}
         feature_extinson = feature_extract_dict[args.feature_extract]
         feature_extinson_titan = ".h5"
-        # if feature_extinson == ".h5":
-        temp_feature_path_titan = os.path.join("/shares/sinha/sadeleye/TITAN_Fets/TCGA_Titan_Fet",
-                                            row["filename"].split(".")[0] + feature_extinson_titan,)
-        # else:
-        temp_feature_path_uni = os.path.join(
-                args.feature_input_dir,
-                "rawData",
-                "slides",
-                args.cancer_type,
-                row["id"],
-                "_features",
-                row["filename"].replace(
-                    ".svs", feature_extinson 
-                ), 
-            )
+        if feature_extinson == ".h5":
+            temp_feature_path = os.path.join("/shares/sinha/sadeleye/TITAN_Fets/TCGA_Titan_Fet",
+                                                row["filename"].split(".")[0] + feature_extinson_titan,)
+        else:
+            temp_feature_path = os.path.join(
+                    args.feature_input_dir,
+                    "rawData",
+                    "slides",
+                    args.cancer_type,
+                    row["id"],
+                    "_features",
+                    row["filename"].replace(
+                        ".svs", feature_extinson 
+                    ), 
+                )
 
-        if not os.path.exists(temp_feature_path_uni) or not os.path.exists(temp_feature_path_titan):
+        if not os.path.exists(temp_feature_path):
             continue
-        file_paths.append((temp_feature_path_uni,temp_feature_path_titan))
+        file_paths.append(temp_feature_path)
         group_ids.append(unique_patient_slide_ids[row["case_submitter_id"]])
         targets.append(row["ecDNA_status"])
     print(f" Working with this many samples: {len(file_paths)}")
     print(f"{(sum(targets)/len(targets))*100:.2f}% of samples are Postive")
-    # return Feature_Dataset(file_paths,targets,feature_extinson), group_ids
-    return Feature_Dataset_combined(file_paths,targets,feature_extinson), group_ids
+    return Feature_Dataset(file_paths, targets, feature_extinson), group_ids
 
 
 
@@ -205,7 +204,7 @@ def nested_cv_with_regularization_grouped(dataset, input_dim, group_ids, n_outer
     regularization_params = {
         'L1 only': {'l1_values': [0.005], 'l2_values': [0.0]},
     }
-
+  
     # regularization_params = {
     #     'L1 only': {'l1_values': [0.0001, 0.0005, 0.001, 0.005, 0.01], 'l2_values': [0.0]},
     #     'L2 only': {'l1_values': [0.0], 'l2_values': [0.0001, 0.0005, 0.001, 0.005, 0.01]},
@@ -223,9 +222,9 @@ def nested_cv_with_regularization_grouped(dataset, input_dim, group_ids, n_outer
     # Results tracking
     # all_results = {reg_type: {'scores': [], 'detailed_metrics': [], 'best_params': []} for reg_type in regularization_params.keys()}
  
-
+    metrics = {'auc_scores': [], 'f1': [], 'recall': [], 'precision': [], 'accuracy': []} 
     all_results = {
-    (l1, l2): {'scores': []} 
+    (l1, l2): metrics 
     for l1 in regularization_params['L1 only']['l1_values']
     for l2 in regularization_params['L1 only']['l2_values']
     }
@@ -241,7 +240,7 @@ def nested_cv_with_regularization_grouped(dataset, input_dim, group_ids, n_outer
                     
                     print(f"  Testing L1={l1_lambda}, L2={l2_lambda}")
                 
-                    feature_select = {'threshold': 0.7} # {'threshold': 0.7}, {'topK':10} , {'percent': 0.1}
+                    feature_select = {'percent': 0.1} # {'threshold': 0.7}, {'topK':10} , {'percent': 0.1}
 
                     # Train a model with best parameters on all train_val data (except early stopping subset)
                     # model = EcDNATileClassifier(input_dim=input_dim, hidden_dim=hidden_dim).to(device)
@@ -250,7 +249,7 @@ def nested_cv_with_regularization_grouped(dataset, input_dim, group_ids, n_outer
                     # model.set_feature_mask(device,Subset(dataset, train_val_idx))
                     
                     best_model = None
-                    best_es_score = -np.inf
+                    best_es_score = {'auc_scores': -np.inf, 'f1': -np.inf, 'recall': -np.inf, 'precision': -np.inf, 'accuracy': -np.inf} 
                     patience_counter = 0
                     
                     for epoch in range(epochs):
@@ -265,9 +264,13 @@ def nested_cv_with_regularization_grouped(dataset, input_dim, group_ids, n_outer
                         
                         # Evaluate for early stopping
                         es_score, _ = evaluate_model(model, Subset(dataset,test_val_idx), batch_size)
+                        temp_metrics = evaluate_model_f1(model, Subset(dataset,test_val_idx), batch_size)
                         
-                        if es_score > best_es_score:
-                            best_es_score = es_score
+                        if es_score > best_es_score['auc_scores']:
+                            best_es_score['auc_scores'] = es_score
+                            for x in temp_metrics:
+                                if x in best_es_score:
+                                    best_es_score[x] = temp_metrics[x]
                             best_model = deepcopy(model.state_dict())
                             patience_counter = 0
                         else:
@@ -275,127 +278,25 @@ def nested_cv_with_regularization_grouped(dataset, input_dim, group_ids, n_outer
                             if patience_counter >= early_stopping_patience:
                                 print(f"  Early stopping at epoch {epoch}")
                                 break
-                        
-                    all_results[(l1_lambda,l2_lambda)]['scores'].append(best_es_score)
-                    print(f"   Model CV score: {best_es_score:.4f}")
+                    for metric in best_es_score:
+                        all_results[(l1_lambda,l2_lambda)][metric].append(best_es_score[metric])
+                        print(f"   Model {metric} CV score: {best_es_score[metric]:.4f}")
+       
 
     best_param = None
     best_parm_score = -np.inf
     for param in all_results:
-        mean_score = np.mean(all_results[param]['scores']) 
         l1_lambda, l2_lambda = param
-        print(f"\n'l1_lambda': {l1_lambda}, 'l2_lambda': {l2_lambda}")
-        print(f"Mean model CV score: {mean_score:.4f}\n")
-        if mean_score > best_parm_score:
-            best_param = param
-            best_parm_score = mean_score
-
-
-
-    # l1_lambda, l2_lambda = best_param
-    # print("Training and testing with best Param")
-    # print(f"'l1_lambda': {l1_lambda}, 'l2_lambda': {l2_lambda}")
-
-
-    # X_train,X_val, X_test = create_train_val_test_split(dataset_indices, all_labels, group_ids)
-    
-    # # breakpoint()
-
-    # model = EcDNATileClassifier_AucSelect(input_dim=input_dim, hidden_dim=hidden_dim).to(device)
-    # optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
-    # model.set_feature_mask(device, Subset(dataset, X_train))
- 
-    # best_model = None
-    # best_es_score = -np.inf
-    # patience_counter = 0
-    # for epoch in range(epochs):
-    #     # train_loss, _, _, _ = training_epoch(
-    #     train_loss, _, _, _ = training_epoch_with_auc_select(
-    #         model, optimizer, 
-    #         Subset(dataset, X_train), 
-    #         batch_size, 
-    #         l1_lambda, 
-    #         l2_lambda
-    #     )
-        
-    #     # Evaluate for early stopping
-    #     es_score, _ = evaluate_model(model, Subset(dataset,X_val), batch_size)
-    #     if es_score > best_es_score:
-    #         best_es_score = es_score
-    #         best_model = deepcopy(model.state_dict())
-    #         patience_counter = 0
-    #     else:
-    #         patience_counter += 1
-    #         if patience_counter >= early_stopping_patience:
-    #             print(f"  Early stopping at epoch {epoch}")
-    #             break
-    # # Load best model
-    # model.load_state_dict(best_model)
-    
-    # # Evaluate on test set (get primary metric for comparison)
-    # test_score, _ = evaluate_model(model, Subset(dataset, X_test), batch_size)
-    # print(f"Final Test Score: {test_score:.4f}")
-            
-            
+        print(f"\n\n'l1_lambda': {l1_lambda}, 'l2_lambda': {l2_lambda}")
+        for metric in metrics:
+            mean_score = np.mean(all_results[param][metric]) 
+            print(f"Mean model {metric} CV score: {mean_score:.4f}")
+            if mean_score > best_parm_score:
+                best_param = param
+                best_parm_score = mean_score
     
     return best_parm_score
-        # # Evaluate on test set (get primary metric for comparison)
-        # test_score, _ = evaluate_model(model, Subset(dataset,  X_test), batch_size)
-        # print(f"  Test score for {reg_type}: {test_score:.4f}")
-        
-        # # Get detailed metrics for final reporting
-        # detailed_metrics = get_detailed_metrics(model, Subset(dataset,  X_test), batch_size)
-        
-        # # Store results
-        # all_results[reg_type]['scores'].append(test_score)
-        # all_results[reg_type]['detailed_metrics'].append(detailed_metrics)
-        # all_results[reg_type]['best_params'].append(best_params)
-    
-    # # Calculate mean and std for each regularization type
-    # summary = {}
-    # for reg_type in regularization_params.keys():
-    #     scores = all_results[reg_type]['scores']
-    #     detailed_metrics_list = all_results[reg_type]['detailed_metrics']
-        
-    #     # Aggregate detailed metrics
-    #     aggregated_metrics = {}
-    #     for metric in detailed_metrics_list[0].keys():
-    #         values = [d[metric] for d in detailed_metrics_list]
-    #         aggregated_metrics[metric] = {
-    #             'mean': np.mean(values),
-    #             'std': np.std(values)
-    #         }
-        
-    #     summary[reg_type] = {
-    #         'mean_score': np.mean(scores),
-    #         'std_score': np.std(scores),
-    #         'best_params': all_results[reg_type]['best_params'],
-    #         'detailed_metrics': aggregated_metrics
-    #     }
-    
-    # # Determine best regularization type
-    # best_reg_type = max(summary.keys(), key=lambda k: summary[k]['mean_score'])
-    
-    # # Find most common best parameters
-    # all_best_params = all_results[best_reg_type]['best_params']
-    # param_counts = {}
-    # for params in all_best_params:
-    #     param_key = f"L1={params['l1_lambda']}, L2={params['l2_lambda']}"
-    #     if param_key not in param_counts:
-    #         param_counts[param_key] = 0
-    #     param_counts[param_key] += 1
-    
-    # most_common_params = max(param_counts.keys(), key=lambda k: param_counts[k])
-    
-    # # Return results
-    # return {
-    #     'summary': summary,
-    #     'best_regularization': best_reg_type,
-    #     'mean_score': summary[best_reg_type]['mean_score'],
-    #     'std_score': summary[best_reg_type]['std_score'],
-    #     'most_common_params': most_common_params,
-    #     'detailed_results': all_results
-    # }
+
 
 def evaluate_model(model, dataset, batch_size=None):
     """
@@ -423,8 +324,7 @@ def evaluate_model(model, dataset, batch_size=None):
     with torch.no_grad():
         for i in range(len(dataset)):
             x, y = dataset[i]
-            x_u, x_t = x
-            pred = model(x_u.to(device), x_t.to(device))
+            pred = model(x.to(device))
             y = y.view(1,1) # change y shave to be 1 x 1 vector
             
             # Calculate loss
@@ -461,6 +361,7 @@ def evaluate_model(model, dataset, batch_size=None):
     
     return auc, avg_loss
 
+# TODO: combine this with evaluate model. No reason to be seperate
 def evaluate_model_f1(model, dataset, batch_size=None):
     """
     Evaluate binary classification model performance
@@ -475,8 +376,6 @@ def evaluate_model_f1(model, dataset, batch_size=None):
     dict
         Performance metrics including F1 score, recall, precision, and accuracy
     """
-    import numpy as np
-    import torch
     from sklearn.metrics import f1_score, recall_score, precision_score, accuracy_score
     
     device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
@@ -492,6 +391,7 @@ def evaluate_model_f1(model, dataset, batch_size=None):
         for i in range(len(dataset)):
             x, y = dataset[i]
             pred = model(x.to(device))
+            y = y.view(1,1)
             
             # Calculate loss
             loss = loss_fn(pred, y.float().to(device))
@@ -619,11 +519,11 @@ if __name__ == '__main__':
         # All tumor TCGA info from MLecdna
         ecDNA_df_r = pyreadr.read_r(args.base_input_path + f'/tcga_snp_array_gcap_result2/TCGA_SNP_{cancer_type}_prediction_result.rds')
         ecDNA_df = ecDNA_df_r[None] 
+        # TODO Set up dataPrep_MLecdana for titan
         ecDNA_dataset, groupids = dataPrep_MLecdna(ecDNA_df, cancer_type)
     
     print("Training...", flush=True)
-    # input_dim = 768 if args.feature_extract == "titan" else 1024 # Uni or Titan embedding Size
-    input_dim = 768 + 1024
+    input_dim = 768 if args.feature_extract == "titan" else 1024 # Uni or Titan embedding Size
     results = nested_cv_with_regularization_grouped(ecDNA_dataset,input_dim,groupids, epochs=32,n_inner_folds=n_split,n_outer_folds=n_split)
     # results = nested_RFModel(ecDNA_dataset,groupids,n_split,input_dim)
    

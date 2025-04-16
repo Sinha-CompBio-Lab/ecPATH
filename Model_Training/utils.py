@@ -17,28 +17,6 @@ from sklearn.model_selection import KFold, GroupKFold, StratifiedGroupKFold, Gro
 from collections import defaultdict
 
 ##===================================================================================================
-class Feature_Dataset_GenePrdt(Dataset):
-    def __init__(self,filepaths, targets):
-        """
-        Args:
-        file_path (string): Path to .npy file containing slide feature data.
-        """
-        self.features = [np.load(temp_feature).astype(np.float32) for temp_feature in filepaths]
-        self.targets = [
-            (np.array(genes, dtype=np.float32), np.array(status, dtype=np.float32))
-            for genes, status in targets
-        ]
-        # self.targets = np.array(targets, dtype=np.float32)
-        self.length = len(self.features)
-
-    def __len__(self):
-        return self.length
-
-    def __getitem__(self,idx):
-        sample = torch.Tensor(self.features[idx]).float()
-        target_gene = torch.Tensor(self.targets[idx][0]).float()
-        target_status = torch.tensor([self.targets[idx]][1], dtype=torch.float)
-        return sample, (target_gene, target_status)
 
 class Feature_Dataset(Dataset):
     def __init__(self,filepaths, targets, ext):
@@ -68,7 +46,9 @@ class Feature_Dataset(Dataset):
 
 class Feature_Dataset_combined(Dataset):
     def __init__(self,filepaths, targets, ext):
-        """
+        """ 
+        Dataset of Uni + Titan features
+
         Args:
         file_path (string): Path to .npy file containing slide feature data.
         """
@@ -93,7 +73,29 @@ class Feature_Dataset_combined(Dataset):
         target = torch.tensor([self.targets[idx]], dtype=torch.float)
         return (sample_uni,sample_titan), target
      
+class Feature_Dataset_GenePrdt(Dataset):
+    def __init__(self,filepaths, targets):
+        """
+        Args:
+        file_path (string): Path to .npy file containing slide feature data.
+        """
+        self.features = [np.load(temp_feature).astype(np.float32) for temp_feature in filepaths]
+        self.targets = [
+            (np.array(genes, dtype=np.float32), np.array(status, dtype=np.float32))
+            for genes, status in targets
+        ]
+        # self.targets = np.array(targets, dtype=np.float32)
+        self.length = len(self.features)
 
+    def __len__(self):
+        return self.length
+
+    def __getitem__(self,idx):
+        sample = torch.Tensor(self.features[idx]).float()
+        target_gene = torch.Tensor(self.targets[idx][0]).float()
+        target_status = torch.tensor([self.targets[idx]][1], dtype=torch.float)
+        return sample, (target_gene, target_status)
+    
 def get_detailed_metrics(model, dataset, batch_size=None):
     """
     Get detailed evaluation metrics for final model assessment

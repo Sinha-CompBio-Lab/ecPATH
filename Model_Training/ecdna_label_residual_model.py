@@ -54,6 +54,8 @@ class EcDNATileClassifier(nn.Module):
             nn.Dropout(0.2),
             nn.Linear(hidden_dim,1)
         )
+        # self.fc = nn.Linear(input_dim, 1)
+        
         self.sigmoid = nn.Sigmoid()
         
     def forward(self, x):
@@ -61,18 +63,21 @@ class EcDNATileClassifier(nn.Module):
         num_tiles = x.shape[0] 
         
         # Process each tile through residual blocks
-        x = self.res1(x)
-        x = self.res2(x)
-        x = self.res3(x)  # Shape: [num_tiles, hidden_dim]
+        # x = self.res1(x)
+        # x = self.res2(x)
+        # x = self.res3(x)  # Shape: [num_tiles, hidden_dim]
 
         # Apply attention to weight tiles
-        attention_weights = self.attention(x)  # Shape: [num_tiles, 1]
-        attention_weights = torch.softmax(attention_weights, dim=0)  # Normalize weights
+        # attention_weights = self.attention(x)  # Shape: [num_tiles, 1]
+        # attention_weights = torch.softmax(attention_weights, dim=0)  # Normalize weights
         
         # Apply attention to get weighted average of tile features
-        weighted_features = x * attention_weights  # Shape: [num_tiles, hidden_dim]
-        aggregated_features = torch.sum(weighted_features, dim=0, keepdim=True)  # Shape: [1, hidden_dim]
+        # weighted_features = x * attention_weights  # Shape: [num_tiles, hidden_dim]
+        # aggregated_features = torch.sum(weighted_features, dim=0, keepdim=True)  # Shape: [1, hidden_dim]
         
+        aggregated_features = torch.mean(x, dim=0,keepdim=True) # Shape: [1, hidden_dim]
+
+
         # Final prediction
         x = self.fc(aggregated_features)
         return self.sigmoid(x)
@@ -109,9 +114,8 @@ class EcDNATileClassifier_AucSelect(nn.Module):
         # Feature selection parameters
         self.feature_selection = feature_selection
         
-        # Initialize feature mask (all features enabled initially)
-        # self.feature_mask = torch.zeros(hidden_dim, 1)
-        self.feature_mask = torch.zeros(input_dim, 1)
+        # Initialize feature mask (all features enabled initially)        
+        self.feature_mask = torch.ones(input_dim, 1)
 
     def set_feature_mask(self, device, train_set):
         self.feature_mask = self.feature_mask.to(device)
@@ -191,16 +195,16 @@ class EcDNATileClassifier_AucSelect(nn.Module):
 
         top_indices = self.feature_mask_select(feature_scores, self.feature_selection)
 
-        print(len(top_indices))
-        meanscore = []
-        for idx in top_indices:
-            # Convert tensor index to integer for printing
-            feature_idx = idx.item()
-            score = feature_scores[feature_idx].item()
-            meanscore.append(score)
-            # print(f"Feature {feature_idx}: AUC = {score:.4f}")
-        meanscore = sum(meanscore) / len(meanscore)
-        print(f"Mean AUC score is: {meanscore}")
+        # print(len(top_indices))
+        # meanscore = []
+        # for idx in top_indices:
+        #     # Convert tensor index to integer for printing
+        #     feature_idx = idx.item()
+        #     score = feature_scores[feature_idx].item()
+        #     meanscore.append(score)
+        #     # print(f"Feature {feature_idx}: AUC = {score:.4f}")
+        # meanscore = sum(meanscore) / len(meanscore)
+        # print(f"Mean AUC score is: {meanscore}")
 
         # Create new mask (all zeros)
         new_mask = torch.zeros(len(auc_scores), 1, device=features_batch.device)
@@ -211,7 +215,7 @@ class EcDNATileClassifier_AucSelect(nn.Module):
         # Update the feature mask (gradual update to stabilize training)
         alpha = 0.9  # Exponential moving average factor
         self.feature_mask = alpha * self.feature_mask + (1 - alpha) * new_mask
-        self.feature_mask = new_mask
+        # self.feature_mask = new_mask
         
     # Update the feature mask
     def select_features_by_auc(self, features):
@@ -222,7 +226,7 @@ class EcDNATileClassifier_AucSelect(nn.Module):
             
         return features * self.feature_mask.t()
     
-    def forward(self, x_u, x_t):
+    def forward(self, x):
         # batch_size = 1  # Single slide with multiple tiles for now
         # num_tiles = x.shape[0] 
         
@@ -232,8 +236,7 @@ class EcDNATileClassifier_AucSelect(nn.Module):
         # x = self.res3(x)  # Shape: [num_tiles, hidden_dim]
 
          # Average pooling across tiles
-        aggregated_features = torch.mean(x_u, dim=0,keepdim=True) # Shape: [1, hidden_dim]
-        aggregated_features = torch.cat((aggregated_features,x_t),dim=1)
+        aggregated_features = torch.mean(x, dim=0,keepdim=True) # Shape: [1, hidden_dim]
 
          # Apply feature selection
         selected_features = self.select_features_by_auc(aggregated_features)
@@ -274,9 +277,7 @@ def training_epoch_with_auc_select(model, optimizer, train_set, batch_size, l1_l
             idx = idx_list[i_batch + k]
             
             x, y = train_set[idx]
-            x_u, x_t = x
-            x_u = x_u.to(device)
-            x_t = x_t.to(device)
+            x = x.to(device)
             y = y.view(1,1).float().to(device)  # change y to be 1 x 1 vector
 
             with torch.no_grad():
@@ -286,8 +287,8 @@ def training_epoch_with_auc_select(model, optimizer, train_set, batch_size, l1_l
             #     # features = model.res2(features)
             #     # features = model.res3(features)
             #     # aggregated_features = torch.mean(features, dim=0, keepdim=True)
-                aggregated_features = torch.mean(x_u, dim=0, keepdim=True)   
-                aggregated_features = torch.cat((aggregated_features, x_t), dim=1)
+                aggregated_features = torch.mean(x, dim=0, keepdim=True)   
+
 
 
 
@@ -297,7 +298,7 @@ def training_epoch_with_auc_select(model, optimizer, train_set, batch_size, l1_l
                 batch_labels.append(y.detach())
             
             # Complete the forward pass with feature selection
-            pred = model(x_u,x_t)
+            pred = model(x)
             
             # Calculate base loss
             base_loss = loss_fn(pred, y)
