@@ -30,77 +30,25 @@ class ResidualBlock(nn.Module):
         out = self.relu(out)
         return out
 
-class EcDNATileClassifier(nn.Module):
-    def __init__(self, input_dim, hidden_dim=256):
-        super(EcDNATileClassifier, self).__init__()
+class EcDNATileClassifier_AucSelect(nn.Module):
+    def __init__(self, input_dim, feature_type, hidden_dim=256, use_attention=False, 
+                 use_feature_selection=True, feature_selection={'percent': 0.1}, dropout=0.2):
+        super(EcDNATileClassifier_AucSelect, self).__init__()
         
-        # Feature extractors for each tile
+        self.feature_type = feature_type
+        self.use_attention = use_attention
+        self.use_feature_selection = use_feature_selection
+        # Feature selection parameters
+        self.feature_selection = feature_selection
+
+        # Tested and no longer used. 
         self.res1 = ResidualBlock(input_dim, hidden_dim)
-        self.res2 = ResidualBlock(hidden_dim, hidden_dim)
-        self.res3 = ResidualBlock(hidden_dim, hidden_dim)
         
-        # Attention mechanism for tile aggregation
         self.attention = nn.Sequential(
-            nn.Linear(hidden_dim, 64),
+            nn.Linear(input_dim, 64),
             nn.Tanh(),
             nn.Linear(64, 1)
         )
-        
-        # Final prediction layer
-        # self.fc = nn.Linear(hidden_dim, 1)
-        self.fc =  nn.Sequential(
-            nn.Linear(hidden_dim, hidden_dim),
-            nn.ReLU(),
-            nn.Dropout(0.2),
-            nn.Linear(hidden_dim,1)
-        )
-        # self.fc = nn.Linear(input_dim, 1)
-        
-        self.sigmoid = nn.Sigmoid()
-        
-    def forward(self, x):
-        batch_size = 1  # Single slide with multiple tiles for now
-        num_tiles = x.shape[0] 
-        
-        # Process each tile through residual blocks
-        # x = self.res1(x)
-        # x = self.res2(x)
-        # x = self.res3(x)  # Shape: [num_tiles, hidden_dim]
-
-        # Apply attention to weight tiles
-        # attention_weights = self.attention(x)  # Shape: [num_tiles, 1]
-        # attention_weights = torch.softmax(attention_weights, dim=0)  # Normalize weights
-        
-        # Apply attention to get weighted average of tile features
-        # weighted_features = x * attention_weights  # Shape: [num_tiles, hidden_dim]
-        # aggregated_features = torch.sum(weighted_features, dim=0, keepdim=True)  # Shape: [1, hidden_dim]
-        
-        aggregated_features = torch.mean(x, dim=0,keepdim=True) # Shape: [1, hidden_dim]
-
-
-        # Final prediction
-        x = self.fc(aggregated_features)
-        return self.sigmoid(x)
-
-class EcDNATileClassifier_AucSelect(nn.Module):
-    def __init__(self, input_dim, hidden_dim=256, feature_selection={'threshold': 0.7}, dropout=0.2):
-        super(EcDNATileClassifier_AucSelect, self).__init__()
-        
-        # Feature extractors for each tile
-        self.res1 = ResidualBlock(input_dim, hidden_dim)
-        self.res2 = ResidualBlock(hidden_dim, hidden_dim)
-        self.res3 = ResidualBlock(hidden_dim, hidden_dim)
-        
-        
-        # Final prediction layer
-        #residual block
-        # self.fc = nn.Linear(hidden_dim, 1)
-        # self.fc =  nn.Sequential(
-        #     nn.Linear(hidden_dim, hidden_dim),
-        #     nn.ReLU(),
-        #     nn.Dropout(dropout),
-        #     nn.Linear(hidden_dim,1)
-        # )
 
         self.fc = nn.Linear(input_dim, 1)
         # self.fc =  nn.Sequential(
@@ -109,10 +57,8 @@ class EcDNATileClassifier_AucSelect(nn.Module):
         #     nn.Dropout(dropout),
         #     nn.Linear(hidden_dim,1)
         # )
-        self.sigmoid = nn.Sigmoid()
 
-        # Feature selection parameters
-        self.feature_selection = feature_selection
+        self.sigmoid = nn.Sigmoid()
         
         # Initialize feature mask (all features enabled initially)        
         self.feature_mask = torch.ones(input_dim, 1)
@@ -131,13 +77,7 @@ class EcDNATileClassifier_AucSelect(nn.Module):
 
             with torch.no_grad():
                 # Get features before feature selection (for AUC calculation)
-                # Forward pass through feature extraction blocks
-                # features = self.res1(x)
-                # features = self.res2(features)
-                # features = self.res3(features)
-                # aggregated_features = torch.mean(features, dim=0, keepdim=True)
                 aggregated_features = torch.mean(x, dim=0, keepdim=True)
-                
                 # Store for AUC calculation
                 batch_features.append(aggregated_features.detach())
                 # Titan
@@ -146,7 +86,7 @@ class EcDNATileClassifier_AucSelect(nn.Module):
                 
         batch_features_tensor = torch.cat(batch_features, dim=0)
         batch_labels_tensor = torch.cat(batch_labels, dim=0)
-        self.update_feature_mask(batch_features_tensor, batch_labels_tensor)
+        self.update_feature_mask(batch_features_tensor, batch_labels_tensor,mvAvg=False)
 
     def feature_mask_select(self, auc_scores, selector):
         if 'threshold' in selector:
@@ -171,8 +111,8 @@ class EcDNATileClassifier_AucSelect(nn.Module):
         
         return selected_indices
 
-    def update_feature_mask(self, features_batch, labels_batch):
-        """Update feature mask based on AUC scores"""
+    def update_feature_mask(self, features_batch, labels_batch, mvAvg=True):
+        """Update feature mask based MvAvg of AUC scores unless MvAvg set to false"""
         
         # Compute AUC for each feature
         features_np = features_batch.detach().cpu().numpy()
@@ -195,16 +135,16 @@ class EcDNATileClassifier_AucSelect(nn.Module):
 
         top_indices = self.feature_mask_select(feature_scores, self.feature_selection)
 
-        # print(len(top_indices))
-        # meanscore = []
-        # for idx in top_indices:
-        #     # Convert tensor index to integer for printing
-        #     feature_idx = idx.item()
-        #     score = feature_scores[feature_idx].item()
-        #     meanscore.append(score)
-        #     # print(f"Feature {feature_idx}: AUC = {score:.4f}")
-        # meanscore = sum(meanscore) / len(meanscore)
-        # print(f"Mean AUC score is: {meanscore}")
+        print(f"\n{len(top_indices)}")
+        meanscore = []
+        for idx in top_indices:
+            # Convert tensor index to integer for printing
+            feature_idx = idx.item()
+            score = feature_scores[feature_idx].item()
+            meanscore.append(score)
+            # print(f"Feature {feature_idx}: AUC = {score:.4f}")
+        meanscore = sum(meanscore) / len(meanscore)
+        print(f"Mean AUC score is: {meanscore}\n")
 
         # Create new mask (all zeros)
         new_mask = torch.zeros(len(auc_scores), 1, device=features_batch.device)
@@ -212,10 +152,12 @@ class EcDNATileClassifier_AucSelect(nn.Module):
         # Set 1's for the top features
         new_mask[top_indices] = 1.0
         
-        # Update the feature mask (gradual update to stabilize training)
-        alpha = 0.9  # Exponential moving average factor
-        self.feature_mask = alpha * self.feature_mask + (1 - alpha) * new_mask
-        # self.feature_mask = new_mask
+        if mvAvg:
+            # Update the feature mask (gradual update to stabilize training)
+            alpha = 0.5 #.9  # Exponential moving average factor
+            self.feature_mask = alpha * self.feature_mask + (1 - alpha) * new_mask
+        else:
+            self.feature_mask = new_mask
         
     # Update the feature mask
     def select_features_by_auc(self, features):
@@ -227,28 +169,27 @@ class EcDNATileClassifier_AucSelect(nn.Module):
         return features * self.feature_mask.t()
     
     def forward(self, x):
-        # batch_size = 1  # Single slide with multiple tiles for now
-        # num_tiles = x.shape[0] 
-        
-        # # # Process each tile through residual blocks
-        # x = self.res1(x)
-        # x = self.res2(x)
-        # x = self.res3(x)  # Shape: [num_tiles, hidden_dim]
+        if self.feature_type == "titan":
+            aggregated_features = x
+        else:
+            if self.use_attention:
+                attention_weights = self.attention(x) # Shape: [num_tiles, 1]
+                attention_weights = torch.softmax(attention_weights, dim=0) # Normalize weights
+                aggregated_features = torch.sum(x * attention_weights, dim=0, keepdim=True)  # Shape: [num_tiles, hidden_dim]
+            else:
+                aggregated_features = torch.mean(x, dim=0, keepdim=True) 
 
-         # Average pooling across tiles
-        aggregated_features = torch.mean(x, dim=0,keepdim=True) # Shape: [1, hidden_dim]
+        if self.use_feature_selection:
+            selected_features = self.select_features_by_auc(aggregated_features) 
+        else:
+            selected_features = aggregated_features
 
-         # Apply feature selection
-        selected_features = self.select_features_by_auc(aggregated_features)
-
-        #Titan
-        # selected_features = self.select_features_by_auc(x)
-        
-        # Final prediction using the linear layer
         output = self.fc(selected_features)
         return self.sigmoid(output)
+    
 
-def training_epoch_with_auc_select(model, optimizer, train_set, batch_size, l1_lambda=0.0, l2_lambda=0.0):
+def training_epoch_with_auc_select(model, optimizer, train_set, model_feature_select,feature_type, 
+                                   batch_size, l1_lambda=0.0, l2_lambda=0.0):
     device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
     model.train()
     
@@ -279,23 +220,19 @@ def training_epoch_with_auc_select(model, optimizer, train_set, batch_size, l1_l
             x, y = train_set[idx]
             x = x.to(device)
             y = y.view(1,1).float().to(device)  # change y to be 1 x 1 vector
+            
+            # Store for AUC calculation
+            if model_feature_select == 'mvavg':
+                with torch.no_grad():
+                    if feature_type == 'titan':
+                        batch_features.append(x.detach()) #Titan
+                    else:
+                        # Get features before feature selection (for AUC calculation)
+                        aggregated_features = torch.mean(x, dim=0, keepdim=True)
+                        batch_features.append(aggregated_features.detach()) #Uni
 
-            with torch.no_grad():
-            #     # Get features before feature selection (for AUC calculation)
-            #     # Forward pass through feature extraction blocks
-            #     # features = model.res1(x)
-            #     # features = model.res2(features)
-            #     # features = model.res3(features)
-            #     # aggregated_features = torch.mean(features, dim=0, keepdim=True)
-                aggregated_features = torch.mean(x, dim=0, keepdim=True)   
+                    batch_labels.append(y.detach())
 
-
-
-
-            #     # Store for AUC calculation
-                batch_features.append(aggregated_features.detach())
-                # batch_features.append(x.detach())
-                batch_labels.append(y.detach())
             
             # Complete the forward pass with feature selection
             pred = model(x)
@@ -339,6 +276,7 @@ def training_epoch_with_auc_select(model, optimizer, train_set, batch_size, l1_l
         # Update parameters using gradients
         optimizer.step()
         
+
         # Update feature mask after processing the batch
         if batch_features:
             batch_features_tensor = torch.cat(batch_features, dim=0)
