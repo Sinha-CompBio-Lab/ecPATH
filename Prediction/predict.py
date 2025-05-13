@@ -58,23 +58,25 @@ def main():
     os.makedirs(config.basic_param["output_dir"], exist_ok=True)
     print("Setting up environment Done!\n")
 
-    # check for the input files, in the input directory with the input keyword
-    input_files = glob.glob(
-        os.path.join(
-            config.basic_param["input_dir"],
-            f"*{config.preprocess_param['input_keyword']}*{config.preprocess_param['slide_extention']}",
-        )
-    )
-    print(
-        f'A total of {len(input_files)} input files found at {config.basic_param["input_dir"]} \n'
-    )
 
     ###
     ### preprocessing: patching (+plot), normalization/filtering, feature extraction
     if not config.preprocces_flag:
+        feature_extract_dict = {"uni":"-uni.npy", "resnet":".npy"}
+        feature_extinson = feature_extract_dict[args.feature_extract]
+        input_files = glob.glob(f'{config.basic_param["input_dir"]}/*{feature_extinson}', recursive=True) # None Lihe dirctory
+        # input_files = glob.glob(f'{args.features_stored}/{args.cancer_type}/*/_features/*{feature_extinson}', recursive=True) # Lihe directory
+    
         print("preprocces_flag set False, skiping Preprocessing...\n")
         print("Will use features in input directory\n")
     else:
+        # check for the input files, in the input directory with the input keyword
+        input_files = glob.glob(
+            os.path.join(
+                config.basic_param["input_dir"],
+                f"*{config.preprocess_param['input_keyword']}*{config.preprocess_param['slide_extention']}",
+            )
+        )
         print("preprocess_flag set True. Start Preprocessing...")
         preprocessing = preprocess(
             config.BASE_DIR,
@@ -88,6 +90,9 @@ def main():
         preprocessing.process_tiles()  # process the tiles
         print("Done.\n")
 
+    print(
+        f'A total of {len(input_files)} input files found at {config.basic_param["input_dir"]} \n'
+    )
     return input_files
 
 
