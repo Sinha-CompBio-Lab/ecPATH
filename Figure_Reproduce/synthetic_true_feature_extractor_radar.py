@@ -46,7 +46,7 @@ def load_all_results(input_dir="results"):
 
 
 if __name__ == "__main__":
-    feature_select = "titan_GlobalAvg"
+    feature_select = "uni_Test"
     data_dict = load_all_results(f"/shares/sinha/sadeleye/ecPATH_Results/Synthetic_vs_True/{feature_select}")
 
     # Generate a radar plot for AUC scores
