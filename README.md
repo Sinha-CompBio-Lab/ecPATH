@@ -23,6 +23,7 @@
     git clone https://github.com/Sinha-CompBio-Lab/ecPATH.git
 #### 2. Create the desired conda environment
     conda env create -f environment.yml
+    pip install spams-bin
 #### 3. Customize `./Prediction/param.py` to fit your analysis.(very important)
     # key parameters are critical. Minimum: provide cancer_type, slide_extention, input_keyword, pretrained_model_name.
 #### 4. Prepare input slides: place slides in `./Prediction/input/` (Currently, only `.svs` image files are tested & supported)
@@ -89,6 +90,31 @@ To reproduce the figures in our manuscript, you need:
     - stringr
     - survminer
     - tidyr
+ 
+Rador plots for Direct UNI and Titan Features to EcDNA labels now added. 
+- `/Figure_Reproduce/data_plots.py` plots auc scores and show an example of expected data input.
+- `/Figure_Reproduce/synthetic_true_feature_extractor_radar.py`  uses the .txt output files from model train and use data_plots to make radar plot data for comparison.
 
 ## Model Training Specifications
-`./Model_Training/` contains essential building blocks for model training, including data preprocessing, model architecture, and training logic. We primarily utilized the Slurm Workload Manager to leverage computing resources at Sanford Burnham Prebys Medical Discovery Institute. Please note that in this release, these model training scripts are provided as reference implementations rather than for direct execution. You may need to refactor and adapt them to suit your specific computing environment and requirements.
+
+
+
+In this branch `Model_Training/`, and subsequently our model, has been updated from the pervious version to now perform edDNA status prediction directly from WSI using Uni and Titan Features. We primarily utilized the Slurm Workload Manager to leverage computing resources at Sanford Burnham Prebys Medical Discovery Institute. Due to the reliance of our ecdna labels dataframes. You may need to refactor and adapt the data loader based on your ecdna label data structure.
+
+### 0. ecDNA Data 
+Our Ecdna label data comes from two primary sources: [ecdna true data](https://www.ampliconrepository.org/project/655c060abba7c925095555da) and [ecdna syntethic data](https://www.ampliconrepository.org/project/655c060abba7c925095555da) 
+
+Our gene cpy number data comes from: [CpyNumber](https://xenabrowser.net/datapages/?dataset=TCGA.PANCAN.sampleMap%2FGistic2_CopyNumber_Gistic2_all_thresholded.by_genes&host=https%3A%2F%2Ftcga.xenahubs.net&removeHub=https%3A%2F%2Fxena.treehouse.gi.ucsc.edu%3A443)
+
+### 1. Training
+
+There are two primary file: 
+- `Model_Training/ecdna_label_direct_train.py` contains the script to train the model using cross validation and different regulizaiton prameters. Results are saved to a .txt file contining the best metrics. 
+- `Model_Training/ecdna_label_direct_model.py` contains the model architecture 
+
+To train the model:
+```
+python Model_Training/ecdna_label_direct_train.py --feature_input_dir /path_to_Uni_or_titan_features --feature_extract uni  --base_input_dir /path_to_ecdna_label_dataframes --data_type True
+```
+
+
