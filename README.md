@@ -97,24 +97,49 @@ Rador plots for Direct UNI and Titan Features to EcDNA labels now added.
 
 ## Model Training Specifications
 
-
-
 In this branch `Model_Training/`, and subsequently our model, has been updated from the pervious version to now perform edDNA status prediction directly from WSI using Uni and Titan Features. We primarily utilized the Slurm Workload Manager to leverage computing resources at Sanford Burnham Prebys Medical Discovery Institute. Due to the reliance of our ecdna labels dataframes. You may need to refactor and adapt the data loader based on your ecdna label data structure.
 
-### 0. ecDNA Data 
-Our Ecdna label data comes from two primary sources: [ecdna true data](https://www.ampliconrepository.org/project/655c060abba7c925095555da) and [ecdna syntethic data](https://www.ampliconrepository.org/project/655c060abba7c925095555da) 
 
-Our gene cpy number data comes from: [CpyNumber](https://xenabrowser.net/datapages/?dataset=TCGA.PANCAN.sampleMap%2FGistic2_CopyNumber_Gistic2_all_thresholded.by_genes&host=https%3A%2F%2Ftcga.xenahubs.net&removeHub=https%3A%2F%2Fxena.treehouse.gi.ucsc.edu%3A443)
+### ecDNA Data
 
-### 1. Training
+Our ecDNA label data comes from two primary sources:
 
-There are two primary file: 
-- `Model_Training/ecdna_label_direct_train.py` contains the script to train the model using cross validation and different regulizaiton prameters. Results are saved to a .txt file contining the best metrics. 
-- `Model_Training/ecdna_label_direct_model.py` contains the model architecture 
+- [ecDNA True Data](https://www.ampliconrepository.org/project/655c060abba7c925095555da)  
+- [ecDNA Synthetic Data](https://www.ampliconrepository.org/project/655c060abba7c925095555da)
 
-To train the model:
-```
-python Model_Training/ecdna_label_direct_train.py --feature_input_dir /path_to_Uni_or_titan_features --feature_extract uni  --base_input_dir /path_to_ecdna_label_dataframes --data_type True
-```
+Gene copy number data is available from:  
+- [Copy Number (Xena Browser)](https://xenabrowser.net/datapages/?dataset=TCGA.PANCAN.sampleMap%2FGistic2_CopyNumber_Gistic2_all_thresholded.by_genes&host=https%3A%2F%2Ftcga.xenahubs.net&removeHub=https%3A%2F%2Fxena.treehouse.gi.ucsc.edu%3A443)
+
+To train using our framework, download one of the above dataframes and place it within a directory to be passed into the `--base_input_dir` argument.
+
+---
+
+### Training
+
+There are two primary files involved in training:
+
+- `Model_Training/ecdna_label_direct_train.py`:  
+  This script handles training the model using cross-validation and various regularization parameters. Results are saved to a `.txt` file containing the best metrics.
+    - You can select different feature selection methods using the `--model_feature_select` argument.
+    - For both moving average and global feature selection, different methods can be specified by setting `feature_select_type` to one of the following:
+      - `{'threshold': 0.7}` – selects features with AUC above a given threshold
+      - `{'topK': 10}` – selects the top K features by AUC
+      - `{'percent': 0.1}` – selects the top K% features by AUC
+
+- `Model_Training/ecdna_label_direct_model.py`:  
+  This file defines the model architecture.
+    - Uni features are aggregated using the mean by default but can also be aggregated using attention by setting the `use_attention` parameter.
+
+---
+
+### Example Training Command
+
+```bash
+python Model_Training/ecdna_label_direct_train.py \
+  --feature_input_dir /path_to_Uni_or_titan_features \
+  --feature_extract uni \
+  --base_input_dir /path_to_ecdna_label_dataframes \
+  --data_type True
+
 
 
