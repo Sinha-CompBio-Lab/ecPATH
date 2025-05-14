@@ -259,10 +259,11 @@ def nested_cv_with_regularization_grouped(dataset, input_dim, group_ids, n_outer
                     
                     print(f"  Testing L1={l1_lambda}, L2={l2_lambda}")
                 
-                    feature_select = {'percent': 0.1} # {'threshold': 0.7}, {'topK':10} , {'percent': 0.1}
+                    feature_select_type = {'percent': 0.1} # {'threshold': 0.7}, {'topK':10} , {'percent': 0.1}
 
                     # Train a model with best parameters on all train_val data (except early stopping subset)
-                    model = EcDNATileClassifier_AucSelect(input_dim, args.feature_extract, hidden_dim, feature_select).to(device)
+                    if args.
+                    model = EcDNATileClassifier_AucSelect(input_dim, args.feature_extract, hidden_dim, feature_select_type).to(device)
                     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
                     if args.model_feature_select == 'global':
                         model.set_feature_mask(device,Subset(dataset, train_val_idx))
@@ -451,7 +452,7 @@ parser.add_argument('--curr_split', type=int, default=24)
 parser.add_argument('--epochs', type=int, default=1)
 parser.add_argument('--feature_extract', type=str, default= 'uni', choices=['uni','titan'])
 parser.add_argument('--data_type', type=str, default= 'True', choices=['True','Synthetic'])
-parser.add_argument('--model_feature_select', type=str, default= 'mvavg', choices=['mvavg','global','attn','none'])
+parser.add_argument('--model_feature_select', type=str, default= 'mvavg', choices=['mvavg','global','none'])
 
 parser.add_argument('--base_input_path', type=str, default="/shares/sinha/sadeleye/ecPATH/Data/Training_Data",
                     help="base input path where data files are kept")
