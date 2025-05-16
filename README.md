@@ -97,7 +97,7 @@ Rador plots for Direct UNI and Titan Features to EcDNA labels now added.
 
 ## Model Training Specifications
 
-In this branch `Model_Training/`, and subsequently our model, has been updated from the pervious version to now perform edDNA status prediction directly from WSI using Uni and Titan Features. We primarily utilized the Slurm Workload Manager to leverage computing resources at Sanford Burnham Prebys Medical Discovery Institute. Due to the reliance of our ecdna labels dataframes. You may need to refactor and adapt the data loader based on your ecdna label data structure.
+In this branch `Model_Training/`, and subsequently our model, has been updated from the pervious version to now perform ecDNA status prediction directly from WSI using Uni and Titan Features. We primarily utilized the Slurm Workload Manager to leverage computing resources at Sanford Burnham Prebys Medical Discovery Institute. Due to the reliance of our ecdna labels dataframes. You may need to refactor and adapt the data loader based on your ecdna label data structure.
 
 
 ### ecDNA Data
